@@ -1,0 +1,3116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BodyTrack — Buddy</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #eef0f8; color: #1a1a2e; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* === HEADER === */
+        header {
+            background: linear-gradient(135deg, #5a72e4 0%, #7c4dbd 100%);
+            color: white; padding: 15px 24px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 4px 20px rgba(90,114,228,0.4);
+            position: relative; overflow: hidden;
+        }
+        header::after {
+            content: ''; position: absolute; top: -50%; right: -4%;
+            width: 240px; height: 240px;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 68%);
+            pointer-events: none;
+        }
+        header h1 { font-size: 21px; font-weight: 800; letter-spacing: -0.5px; }
+        header .subtitle { font-size: 11px; opacity: 0.7; margin-top: 3px; letter-spacing: 0.2px; }
+        header .date { font-size: 12px; opacity: 0.8; text-align: right; line-height: 1.6; }
+
+        /* === STATS BAR === */
+        .statsbar { background: white; display: flex; box-shadow: 0 2px 12px rgba(0,0,0,0.07); border-bottom: 1px solid rgba(0,0,0,0.05); }
+        .stat-pill { flex: 1; padding: 12px 16px; border-right: 1px solid #f0f0f0; min-width: 0; position: relative; }
+        .stat-pill::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+        .stat-pill:last-child { border-right: none; }
+        .stat-pill.sp-weight::before { background: linear-gradient(90deg, #667eea, #764ba2); }
+        .stat-pill.sp-bmi::before    { background: linear-gradient(90deg, #26c6da, #00897b); }
+        .stat-pill.sp-waist::before  { background: linear-gradient(90deg, #ff7043, #e53935); }
+        .stat-pill.sp-lost::before   { background: linear-gradient(90deg, #66bb6a, #2e7d32); }
+        .sp-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: #aaa; margin-bottom: 3px; }
+        .sp-val   { font-size: 22px; font-weight: 800; color: #1a1a2e; }
+        .sp-unit  { font-size: 11px; color: #bbb; }
+        .sp-sub   { font-size: 10px; color: #bbb; margin-top: 1px; }
+        .sp-chg   { font-size: 10px; margin-top: 2px; font-weight: 600; }
+        .change-down { color: #43a047; }
+        .change-up   { color: #e53935; }
+        .change-flat { color: #aaa; }
+
+        /* === TAB NAVIGATION === */
+        .tab-nav { display: flex; background: #f4f2fc; border-bottom: 1px solid #e8e4f5; padding: 8px 16px; gap: 6px; }
+        .tab-btn { padding: 8px 20px; font-size: 13px; font-weight: 600; border: none; background: none; color: #aaa; cursor: pointer; border-radius: 20px; border-bottom: none; margin-bottom: 0; transition: all .18s; font-family: inherit; }
+        .tab-btn:hover { background: rgba(102,126,234,0.1); color: #667eea; }
+        .tab-btn.active { background: linear-gradient(135deg, #667eea, #764ba2); color: white; box-shadow: 0 3px 10px rgba(102,126,234,0.35); }
+
+        /* === PAGES === */
+        .page { display: none; flex: 1; min-height: 0; overflow: hidden; }
+        .page.active { display: flex; flex-direction: column; }
+        .daily-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 390px; gap: 18px; padding: 18px; max-width: 1280px; width: 100%; margin: 0 auto; overflow: hidden; }
+        .daily-left { min-height: 0; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding-right: 2px; }
+        .trends-wrap { flex: 1; min-height: 0; max-width: 860px; width: 100%; margin: 0 auto; padding: 18px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; }
+
+        /* === CARDS === */
+        .card { background: white; border-radius: 18px; padding: 20px; box-shadow: 0 2px 16px rgba(0,0,0,0.07); }
+
+        .progress-card .card-title { font-size: 13px; font-weight: 700; color: #444; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+        .progress-bar-wrap { height: 12px; background: #ede7f6; border-radius: 6px; overflow: hidden; margin-bottom: 8px; }
+        .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 6px; transition: width 0.6s ease; }
+        .progress-meta { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; }
+
+        .status-badge { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+        .badge-track  { background: #e8f5e9; color: #2e7d32; }
+        .badge-ahead  { background: #e3f2fd; color: #1565c0; }
+        .badge-behind { background: #fff3e0; color: #e65100; }
+        .badge-done   { background: #f3e5f5; color: #6a1b9a; }
+        .badge-start  { background: #f5f5f5; color: #999; }
+
+        .card-title { font-size: 13px; font-weight: 700; color: #444; margin-bottom: 14px; }
+        .chart-wrap { position: relative; height: 170px; }
+
+        /* === LOG LIST === */
+        .log-list { max-height: 220px; overflow-y: auto; }
+        .log-item { display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px solid #f5f5f5; }
+        .log-item:last-child { border-bottom: none; }
+        .log-date   { font-size: 11px; color: #bbb; min-width: 58px; padding-top: 1px; }
+        .log-weight { font-size: 14px; font-weight: 700; }
+        .log-waist  { font-size: 12px; color: #764ba2; margin-top: 1px; }
+        .log-meals  { font-size: 12px; color: #999; margin-top: 2px; }
+        .empty-log  { text-align: center; padding: 28px 0; color: #ccc; font-size: 13px; }
+
+        /* === NUTRITION TABLE === */
+        .nt { width: 100%; border-collapse: collapse; }
+        .nt th { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #bbb; padding: 0 6px 10px; text-align: left; }
+        .nt th.r { text-align: right; }
+        .nt td { padding: 8px 6px; border-top: 1px solid #f5f5f5; vertical-align: middle; }
+        .nt-meal { font-size: 11px; font-weight: 700; color: #888; white-space: nowrap; min-width: 72px; }
+        .nt-foods { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+        .chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 12px; padding: 3px 9px; font-size: 11px; font-weight: 600; }
+        .chip .xbtn { background: none; border: none; cursor: pointer; font-size: 13px; padding: 0; line-height: 1; opacity: 0.45; transition: opacity 0.15s; }
+        .chip .xbtn:hover { opacity: 1; }
+        .chip-breakfast { background: #fff3e0; color: #d84315; }
+        .chip-lunch     { background: #e8f5e9; color: #2e7d32; }
+        .chip-tea       { background: #f3e5f5; color: #6a1b9a; }
+        .chip-dinner    { background: #e3f2fd; color: #1565c0; }
+        .chip-supper    { background: #fce4ec; color: #ad1457; }
+        .addbtn { border: 1.5px dashed #ddd; background: none; border-radius: 12px; padding: 3px 10px; font-size: 11px; color: #ccc; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+        .addbtn:hover { border-color: #667eea; color: #667eea; background: #f5f3ff; }
+        .ntd { text-align: right; font-size: 12px; color: #444; white-space: nowrap; padding-left: 8px; }
+        .ntd.z { color: #ddd; }
+        .nt tr.tot td { border-top: 2px solid #ede7f6; font-weight: 700; font-size: 12px; padding-top: 10px; background: #faf9ff; }
+
+        /* Calorie bar */
+        .cbar-wrap { margin-top: 14px; }
+        .cbar-bg { height: 12px; background: #ede7f6; border-radius: 6px; overflow: hidden; }
+        .cbar-fill { height: 100%; border-radius: 6px; transition: width .4s ease, background .4s; }
+        .c-ok   { background: linear-gradient(90deg, #667eea, #43a047); }
+        .c-warn { background: linear-gradient(90deg, #667eea, #fb8c00); }
+        .c-over { background: linear-gradient(90deg, #fb8c00, #e53935); }
+        .cbar-labels { display: flex; justify-content: space-between; font-size: 11px; color: #999; margin-top: 6px; font-weight: 500; }
+
+        /* === ADD FOOD MODAL === */
+        .overlay { display: none; position: fixed; inset: 0; background: rgba(20,10,50,.5); z-index: 200; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        .overlay.open { display: flex; }
+        .modal { background: white; border-radius: 22px; padding: 24px; width: 460px; max-width: 92vw; max-height: 84vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+        .modal h2 { font-size: 17px; font-weight: 800; margin-bottom: 14px; color: #1a1a2e; }
+        .fsearch { width: 100%; border: 2px solid #ede8f8; border-radius: 12px; padding: 11px 14px; font-size: 13px; outline: none; transition: border-color 0.2s, box-shadow 0.2s; font-family: inherit; }
+        .fsearch:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.12); }
+        .fresults { margin-top: 10px; overflow-y: auto; flex: 1; }
+        .fitem { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 12px; cursor: pointer; transition: background 0.12s; }
+        .fitem:hover { background: #f5f3ff; }
+        .fitem.sel { background: #eeeeff; }
+        .fname { font-size: 13px; font-weight: 600; color: #1a1a2e; }
+        .fmeta { font-size: 11px; color: #aaa; margin-top: 2px; }
+        .fcal { font-size: 12px; font-weight: 700; color: #667eea; white-space: nowrap; margin-left: 12px; background: #f0eeff; padding: 3px 8px; border-radius: 8px; }
+        .mdivider { height: 1px; background: #f0f0f0; margin: 12px 0; }
+        .ctoggle { font-size: 12px; color: #667eea; cursor: pointer; font-weight: 600; }
+        .ctoggle:hover { text-decoration: underline; }
+        .cfields { display: none; margin-top: 12px; }
+        .cfields.open { display: block; }
+        .cat-group-hdr { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: #9987cc; padding: 9px 12px 4px; border-top: 1px solid #f3f0ff; margin-top: 2px; background: #faf9ff; }
+        .cat-group-hdr:first-child { border-top: none; }
+
+        /* Portion panel */
+        .portion-row { background: linear-gradient(135deg, #f2f0ff, #f7f5ff); border: 1px solid #e4e0f8; border-radius: 12px; padding: 10px 12px; margin: 3px 0 5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .portion-input { width: 58px; border: 2px solid #667eea; border-radius: 8px; padding: 5px 6px; font-size: 13px; text-align: center; outline: none; font-family: inherit; background: white; }
+        .portion-info { flex: 1; font-size: 11px; color: #5e35b1; min-width: 100px; font-weight: 600; }
+        .portion-add { background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 8px; padding: 6px 16px; font-size: 12px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 8px rgba(102,126,234,0.3); transition: opacity 0.15s; }
+        .portion-add:hover { opacity: 0.88; }
+
+        .cname { width: 100%; border: 2px solid #ede8f8; border-radius: 10px; padding: 9px 12px; font-size: 13px; outline: none; margin-bottom: 10px; font-family: inherit; transition: border-color 0.2s; }
+        .cname:focus { border-color: #667eea; }
+        .mgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 12px; }
+        .mgrid label { font-size: 10px; color: #aaa; display: block; margin-bottom: 3px; font-weight: 700; text-transform: uppercase; }
+        .mgrid input { width: 100%; border: 1.5px solid #e8e8e8; border-radius: 8px; padding: 6px 8px; font-size: 13px; outline: none; font-family: inherit; transition: border-color 0.2s; }
+        .mgrid input:focus { border-color: #667eea; }
+        .mactions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+        .btn-primary { background: linear-gradient(135deg,#667eea,#764ba2); color: white; border: none; border-radius: 10px; padding: 9px 22px; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 3px 12px rgba(102,126,234,0.3); transition: opacity 0.15s; }
+        .btn-primary:hover { opacity: 0.88; }
+        .btn-cancel  { background: white; color: #999; border: 1.5px solid #e8e8e8; border-radius: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
+        .btn-cancel:hover { border-color: #ccc; color: #555; }
+
+        /* === NUTRITION REQUIREMENTS === */
+        .req-profile { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; padding: 12px 14px; background: linear-gradient(135deg, #f7f5ff, #f0eeff); border-radius: 12px; border: 1px solid #e4defc; }
+        .req-profile label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #888; margin-right: 4px; }
+        .req-sel { border: 1.5px solid #ddd8f5; border-radius: 8px; padding: 5px 9px; font-size: 12px; outline: none; background: white; font-family: inherit; color: #333; cursor: pointer; transition: border-color 0.15s; }
+        .req-sel:focus { border-color: #667eea; }
+        .req-age { width: 52px; border: 1.5px solid #ddd8f5; border-radius: 8px; padding: 5px 8px; font-size: 12px; outline: none; font-family: inherit; transition: border-color 0.15s; }
+        .req-age:focus { border-color: #667eea; }
+        .req-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .req-table th { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #aaa; padding: 4px 8px 8px; text-align: left; }
+        .req-table th.r { text-align: right; }
+        .req-table td { padding: 7px 8px; border-bottom: 1px solid #f5f5f5; vertical-align: middle; }
+        .req-table tr:last-child td { border-bottom: none; }
+        .req-table tr:hover td { background: #fafafa; }
+        .req-group { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; color: #bbb; padding: 14px 8px 5px !important; border-bottom: none !important; }
+        .req-name { font-weight: 600; color: #333; }
+        .req-note { font-size: 10px; color: #bbb; margin-top: 1px; }
+        .req-val { font-weight: 700; color: #667eea; text-align: right; white-space: nowrap; }
+        .req-today { font-weight: 700; text-align: right; white-space: nowrap; }
+        .req-status { font-size: 11px; font-weight: 700; text-align: right; white-space: nowrap; }
+        .req-bar-wrap { height: 6px; background: #ede7f6; border-radius: 3px; margin-top: 5px; width: 100%; }
+        .req-bar { height: 6px; border-radius: 3px; transition: width .5s ease; }
+        .rb-ok   { background: linear-gradient(90deg,#43a047,#66bb6a); }
+        .rb-warn { background: linear-gradient(90deg,#fb8c00,#ffa726); }
+        .rb-over { background: linear-gradient(90deg,#e53935,#ef5350); }
+        .rcol-g { color: #2e7d32; }
+        .rcol-a { color: #e65100; }
+        .rcol-r { color: #c62828; }
+        .rcol-n { color: #bbb; }
+        /* ── Insights page ── */
+        .insights-wrap { flex: 1; min-height: 0; max-width: 860px; width: 100%; margin: 0 auto; padding: 18px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+        .im-row { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f0f0f0; }
+        .im-row:last-child { border-bottom: none; }
+        .im-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+        .dot-g { background: #2e7d32; } .dot-a { background: #f57c00; } .dot-r { background: #c62828; } .dot-n { background: #ccc; }
+        .im-main { flex: 1; }
+        .im-name { font-weight: 600; font-size: 13px; color: #333; }
+        .im-vals { font-size: 11px; color: #888; margin-top: 1px; }
+        .im-advice { font-size: 11px; color: #555; margin-top: 3px; font-style: italic; }
+        .im-section-hdr { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .7px; color: #bbb; padding: 12px 0 4px; }
+        .week-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 6px; margin: 10px 0 16px; }
+        .week-day { text-align: center; }
+        .week-day-label { font-size: 9px; font-weight: 700; color: #bbb; text-transform: uppercase; margin-bottom: 4px; }
+        .week-bar-wrap { height: 60px; display: flex; align-items: flex-end; justify-content: center; }
+        .week-bar { width: 18px; border-radius: 3px 3px 0 0; min-height: 2px; transition: height .3s; }
+        .week-bar.wbar-g { background: #a5d6a7; } .week-bar.wbar-a { background: #ffe082; } .week-bar.wbar-r { background: #ef9a9a; } .week-bar.wbar-n { background: #eee; }
+        .week-cal-val { font-size: 9px; color: #aaa; margin-top: 3px; }
+        .week-stat-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 12px; }
+        .week-stat { background: #f8f9ff; border-radius: 8px; padding: 10px 12px; text-align: center; }
+        .week-stat-val { font-size: 18px; font-weight: 700; color: #667eea; }
+        .week-stat-label { font-size: 10px; color: #aaa; margin-top: 2px; }
+        .week-advice-box { background: #f0f4ff; border-left: 3px solid #667eea; border-radius: 0 8px 8px 0; padding: 10px 14px; font-size: 12px; color: #444; line-height: 1.6; }
+        .no-data-msg { text-align: center; color: #bbb; font-size: 13px; padding: 24px 0; }
+        /* Export */
+        .export-wrap { padding: 4px 0; }
+        .export-note { font-size: 12px; color: #888; margin: 0 0 12px; line-height: 1.5; }
+        .export-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+        .export-btn { padding: 9px 18px; border-radius: 8px; border: 1.5px solid #667eea; background: #fff; color: #667eea; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s; }
+        .export-btn:hover { background: #f0f4ff; }
+        .import-lbl { cursor: pointer; }
+        /* Goal editor */
+        .goal-edit-btn { padding:4px 10px; border-radius:6px; border:1.5px solid #667eea; background:#fff; color:#667eea; font-size:11px; font-weight:600; cursor:pointer; }
+        .goal-edit-btn:hover { background:#f0f4ff; }
+        .goal-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        .goal-lbl { display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#aaa; margin-bottom:4px; }
+        .goal-inp { width:100%; box-sizing:border-box; padding:7px 10px; border:1.5px solid #e0e0e0; border-radius:8px; font-size:13px; color:#333; outline:none; }
+        .goal-inp:focus { border-color:#667eea; }
+        /* Monthly heatmap */
+        .month-heatmap { display:flex; flex-wrap:wrap; gap:4px; margin:10px 0 16px; }
+        .mh-day { width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:#fff; }
+        .mh-g { background:#a5d6a7; color:#1b5e20; } .mh-a { background:#ffe082; color:#7b4f00; }
+        .mh-r { background:#ef9a9a; color:#7f0000; } .mh-n { background:#f0f0f0; color:#bbb; } .mh-f { background:#e8eaf6; color:#9fa8da; }
+        /* Yearly bar chart */
+        .year-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin:10px 0 16px; }
+        .yr-cell { text-align:center; }
+        .yr-label { font-size:9px; font-weight:700; color:#bbb; text-transform:uppercase; margin-bottom:4px; }
+        .yr-bar-wrap { height:50px; display:flex; align-items:flex-end; justify-content:center; }
+        .yr-bar { width:22px; border-radius:3px 3px 0 0; min-height:2px; }
+        .yr-bar.yrb-g { background:#a5d6a7; } .yr-bar.yrb-a { background:#ffe082; } .yr-bar.yrb-r { background:#ef9a9a; } .yr-bar.yrb-n { background:#eee; }
+        .yr-val { font-size:9px; color:#aaa; margin-top:3px; }
+        .yr-logged { font-size:9px; color:#ccc; }
+        /* Export reminder */
+        .export-reminder { display:inline-block; background:#fff3e0; color:#e65100; font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; margin-left:6px; }
+        .ref-row td { background: #f8f9ff; }
+        .ref-source { font-size: 10px; color: #888; text-align: right; font-style: italic; }
+        .ref-disclaimer { font-size: 10px; color: #aaa; padding: 6px 8px 4px !important; border-bottom: none !important; font-style: italic; background: #f8f9ff; }
+
+        /* === HISTORY CARD === */
+        .hist-meta { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+        .hist-field { display: flex; align-items: center; gap: 6px; }
+        .hist-field label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #aaa; }
+        .hist-inp { border: 1.5px solid #e8e8e8; border-radius: 8px; padding: 5px 8px; font-size: 13px; width: 80px; outline: none; font-family: inherit; transition: border-color 0.2s; }
+        .hist-inp:focus { border-color: #667eea; }
+        .hist-unit { font-size: 12px; color: #aaa; }
+        .hist-savebtn { background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 8px; padding: 6px 12px; font-size: 11px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 8px rgba(102,126,234,0.25); transition: opacity 0.15s; }
+        .hist-savebtn:active { opacity: .8; }
+        .hist-empty { text-align: center; color: #ccc; font-size: 13px; padding: 24px 0; }
+        .date-nav { display: flex; align-items: center; gap: 8px; }
+        .date-nav input[type=date] { border: 1.5px solid #e8e8e8; border-radius: 8px; padding: 5px 8px; font-size: 12px; outline: none; font-family: inherit; color: #333; transition: border-color 0.2s; }
+        .date-nav input[type=date]:focus { border-color: #667eea; }
+        .nav-btn { background: white; border: 1.5px solid #e8e8e8; border-radius: 8px; padding: 5px 10px; font-size: 13px; cursor: pointer; color: #667eea; font-weight: 700; transition: all 0.15s; }
+        .nav-btn:hover { border-color: #667eea; background: #f5f3ff; }
+
+        /* === CHATBOT === */
+        .chatbot { display: flex; flex-direction: column; min-height: 0; }
+        .chat-header { margin-bottom: 14px; }
+        .chat-title { font-size: 14px; font-weight: 700; }
+        .chat-title span { display: block; font-size: 11px; font-weight: 400; color: #aaa; margin-top: 2px; }
+
+        .messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 2px; margin-bottom: 12px; }
+        .msg { max-width: 88%; }
+        .msg.user      { align-self: flex-end; }
+        .msg.assistant { align-self: flex-start; }
+        .bubble { padding: 10px 14px; border-radius: 18px; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+        .user .bubble      { background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-bottom-right-radius: 4px; }
+        .assistant .bubble { background: #f3f4f6; color: #1a1a2e; border-bottom-left-radius: 4px; }
+        .msg-time { font-size: 10px; color: #ccc; margin-top: 3px; }
+        .msg.user .msg-time { text-align: right; }
+        .log-confirm { background: #e8f5e9; border-radius: 10px; padding: 8px 12px; font-size: 12px; color: #2e7d32; margin-top: 6px; border-left: 3px solid #43a047; }
+
+        .input-row { display: flex; gap: 8px; }
+        textarea#chatInput {
+            flex: 1; border: 2px solid #ede8f8; border-radius: 12px;
+            padding: 10px 14px; font-size: 13px; font-family: inherit;
+            resize: none; min-height: 44px; max-height: 120px; outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s; line-height: 1.5;
+        }
+        textarea#chatInput:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
+        .send-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white; border: none; border-radius: 12px; width: 46px;
+            cursor: pointer; font-size: 20px; display: flex; align-items: center;
+            justify-content: center; flex-shrink: 0; transition: opacity 0.15s;
+            box-shadow: 0 3px 10px rgba(102,126,234,0.3);
+        }
+        .send-btn:hover { opacity: 0.88; }
+        .photo-btn {
+            background: #f3f4f6; color: #667eea; border: 2px solid #ede8f8;
+            border-radius: 12px; width: 46px; cursor: pointer; font-size: 20px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; transition: all 0.15s;
+        }
+        .photo-btn:hover { background: #f0f0ff; border-color: #667eea; }
+        .chat-img { max-width: 180px; max-height: 180px; border-radius: 10px; display: block; margin-bottom: 4px; }
+        .gemini-key-bar { display:flex; gap:6px; margin-bottom:10px; }
+        .gemini-key-bar input { flex:1; border:2px solid #ede8f8; border-radius:8px; padding:7px 10px; font-size:12px; outline:none; font-family:inherit; }
+        .gemini-key-bar input:focus { border-color:#667eea; }
+        .gemini-key-bar button { padding:7px 12px; border-radius:8px; border:none; background:#667eea; color:#fff; font-size:12px; font-weight:700; cursor:pointer; }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+
+        @media (max-width: 820px) {
+            body { height: auto; overflow: visible; }
+            .page { overflow: visible; }
+            .page.active { display: block; }
+            .daily-grid { grid-template-columns: 1fr; overflow: visible; }
+            .daily-left { min-height: auto; overflow: visible; }
+            .trends-wrap { overflow: visible; min-height: auto; }
+            .stat-pill { padding: 10px 12px; }
+            .sp-val { font-size: 18px; }
+            .chatbot { min-height: 520px; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div>
+        <h1>💪 BodyTrack</h1>
+        <div class="subtitle">Buddy's Personal Health Monitor</div>
+    </div>
+    <div class="date" id="headerDate"></div>
+</header>
+
+<!-- ── Stats Bar ── -->
+<div class="statsbar">
+    <div class="stat-pill sp-weight">
+        <div class="sp-label">⚖️ Weight</div>
+        <div><span class="sp-val" id="sWeight">—</span><span class="sp-unit"> kg</span></div>
+        <div class="sp-chg" id="sWeightChg"></div>
+    </div>
+    <div class="stat-pill sp-bmi">
+        <div class="sp-label">📊 BMI</div>
+        <div><span class="sp-val" id="sBMI">—</span></div>
+        <div class="sp-sub" id="sBMILabel"></div>
+    </div>
+    <div class="stat-pill sp-waist">
+        <div class="sp-label">📏 Waist</div>
+        <div><span class="sp-val" id="sWaist">—</span><span class="sp-unit"> cm</span></div>
+        <div class="sp-sub" id="sWaistIn"></div>
+        <div class="sp-chg" id="sWaistChg"></div>
+    </div>
+    <div class="stat-pill sp-lost">
+        <div class="sp-label">🔥 Lost So Far</div>
+        <div><span class="sp-val" id="sLost">—</span><span class="sp-unit"> kg</span></div>
+        <div class="sp-sub" id="sLostSub"></div>
+    </div>
+</div>
+
+<!-- ── Tab Navigation ── -->
+<div class="tab-nav">
+    <button class="tab-btn active" id="tab-daily" onclick="showPage('daily')">📋 Daily Record</button>
+    <button class="tab-btn" id="tab-trends" onclick="showPage('trends')">📈 Trends</button>
+    <button class="tab-btn" id="tab-insights" onclick="showPage('insights')">💡 Insights</button>
+</div>
+
+<!-- ── Page: Daily Record & Nutrition ── -->
+<div id="page-daily" class="page active">
+    <div class="daily-grid">
+        <div class="daily-left">
+            <div class="card" id="dayCard">
+                <div class="card-title">
+                    <span>Daily Record &amp; Nutrition</span>
+                    <div class="date-nav">
+                        <button class="nav-btn" onclick="dayStep(-1)">‹</button>
+                        <input type="date" id="dayDatePick" onchange="renderDayView(this.value)" />
+                        <button class="nav-btn" onclick="dayStep(1)">›</button>
+                    </div>
+                </div>
+                <div class="req-profile">
+                    <div><label>Age</label><input class="req-age" type="number" id="reqAge" min="10" max="100" placeholder="35" onchange="saveProfileExt();renderDayView()" /></div>
+                    <div><label>Height (cm)</label><input class="req-age" style="width:58px" type="number" id="reqHeight" min="100" max="250" placeholder="170" onchange="saveProfileExt();renderDayView()" /></div>
+                    <div><label>Gender</label>
+                        <select class="req-sel" id="reqGender" onchange="saveProfileExt();renderDayView()">
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                        </select>
+                    </div>
+                    <div><label>Activity</label>
+                        <select class="req-sel" id="reqActivity" onchange="saveProfileExt();renderDayView()">
+                            <option value="1.2">Sedentary (desk job, no exercise)</option>
+                            <option value="1.375" selected>Lightly active (light exercise 1–3×/wk)</option>
+                            <option value="1.55">Moderately active (3–5×/wk)</option>
+                            <option value="1.725">Very active (hard exercise 6–7×/wk)</option>
+                        </select>
+                    </div>
+                    <span id="reqBMRLabel" style="font-size:11px;color:#bbb;margin-left:auto"></span>
+                </div>
+                <div id="dayBody"></div>
+            </div>
+        </div>
+
+        <div class="card chatbot">
+            <div class="chat-header">
+                <div class="chat-title">
+                    Health Assistant
+                    <span>Free · runs locally · no account needed</span>
+                </div>
+            </div>
+            <div class="messages" id="messages"></div>
+            <div class="input-row">
+                <textarea id="chatInput" placeholder="e.g. I'm 74.5 kg, waist 84 cm or 33 inches, had chicken rice for lunch…" onkeydown="handleKey(event)"></textarea>
+                <button class="photo-btn" onclick="document.getElementById('photoInput').click()" title="Upload food photo">📷</button>
+                <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="handlePhotoUpload(event)">
+                <button class="send-btn" onclick="send()" title="Send">&#10148;</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Page: Trends ── -->
+<div id="page-trends" class="page">
+    <div class="trends-wrap">
+        <div class="card progress-card">
+            <div class="card-title">
+                <span id="goalTitle">Weight Goal</span>
+                <span style="display:flex;gap:8px;align-items:center">
+                    <span id="progressBadge"></span>
+                    <button class="goal-edit-btn" onclick="toggleGoalEdit()">✏️ Edit Goal</button>
+                </span>
+            </div>
+            <div class="progress-bar-wrap">
+                <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+            </div>
+            <div class="progress-meta">
+                <span id="progressLeft">—</span>
+                <span id="progressPct">0%</span>
+            </div>
+            <div id="goalEditForm" style="display:none;margin-top:14px;border-top:1px solid #f0f0f0;padding-top:14px">
+                <div class="goal-grid">
+                    <div><label class="goal-lbl">Start Weight (kg)</label><input class="goal-inp" type="number" id="gStartWt" step="0.1" min="30" max="300" placeholder="75.5" /></div>
+                    <div><label class="goal-lbl">Start Date</label><input class="goal-inp" type="date" id="gStartDate" /></div>
+                    <div><label class="goal-lbl">Target Weight (kg)</label><input class="goal-inp" type="number" id="gTargetWt" step="0.1" min="30" max="300" placeholder="70" /></div>
+                    <div><label class="goal-lbl">Target Date</label><input class="goal-inp" type="date" id="gTargetDate" /></div>
+                </div>
+                <button class="btn-primary" style="width:100%;margin-top:10px" onclick="saveGoal()">Save Goal</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Weight Trend (kg)</div>
+            <div class="chart-wrap"><canvas id="weightChart"></canvas></div>
+        </div>
+
+        <div class="card" id="waistCardWrap" style="display:none">
+            <div class="card-title">Waist Trend (cm)</div>
+            <div class="chart-wrap"><canvas id="waistChart"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Page: Insights ── -->
+<div id="page-insights" class="page">
+    <div class="insights-wrap">
+        <div class="card">
+            <div class="card-title">📋 Daily Feedback <span id="insightDayLabel" style="font-size:11px;font-weight:400;color:#aaa;margin-left:6px"></span></div>
+            <div id="insightDailyBody"></div>
+        </div>
+        <div class="card">
+            <div class="card-title">📅 Weekly Summary <span style="font-size:11px;font-weight:400;color:#aaa;margin-left:6px">(last 7 days)</span></div>
+            <div id="insightWeeklyBody"></div>
+        </div>
+        <div class="card">
+            <div class="card-title">📆 Monthly Summary <span id="insightMonthLabel" style="font-size:11px;font-weight:400;color:#aaa;margin-left:6px"></span></div>
+            <div id="insightMonthlyBody"></div>
+        </div>
+        <div class="card">
+            <div class="card-title">📊 Yearly Overview <span id="insightYearLabel" style="font-size:11px;font-weight:400;color:#aaa;margin-left:6px"></span></div>
+            <div id="insightYearlyBody"></div>
+        </div>
+        <div class="card">
+            <div class="card-title">💾 Export &amp; Backup <span id="exportReminderBadge"></span></div>
+            <div class="export-wrap">
+                <p class="export-note" style="font-weight:700;color:#555;margin-bottom:6px">📷 Food Photo Analysis (Gemini AI)</p>
+                <p class="export-note">Paste your Gemini API key to enable photo-based food logging. Get a free key at aistudio.google.com.</p>
+                <div class="gemini-key-bar">
+                    <input type="password" id="geminiKeyInput" placeholder="Paste Gemini API key here…">
+                    <button onclick="saveGeminiKey()">Save</button>
+                </div>
+                <p class="export-note" id="geminiKeyStatus"></p>
+                <p class="export-note">Your data lives in your browser's localStorage. Export regularly to avoid losing records if you clear browser data.</p>
+                <div class="export-actions">
+                    <button class="export-btn" onclick="exportJSON()">⬇ Export JSON</button>
+                    <button class="export-btn" onclick="exportCSV()">⬇ Export CSV</button>
+                    <label class="export-btn import-lbl">⬆ Import JSON<input type="file" accept=".json" onchange="importJSON(event)" style="display:none"></label>
+                </div>
+                <p class="export-note" id="exportLastDate"></p>
+                <p class="export-note" id="importStatus"></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Food Modal -->
+<div class="overlay" id="afOverlay">
+    <div class="modal">
+        <h2 id="afTitle">Add Food</h2>
+        <input class="fsearch" id="fsi" type="text" placeholder="Search all foods… or scroll to browse" oninput="searchFoods(this.value)" autocomplete="off" />
+        <div class="fresults" id="fres"></div>
+        <div class="mdivider"></div>
+        <span class="ctoggle" onclick="document.getElementById('cfields').classList.toggle('open')">+ Enter custom food manually</span>
+        <div class="cfields" id="cfields">
+            <br>
+            <input class="cname" id="cname" type="text" placeholder="Food name" />
+            <div class="mgrid">
+                <div><label>Calories</label><input type="number" id="cCal" placeholder="0" min="0" /></div>
+                <div><label>Protein g</label><input type="number" id="cPro" placeholder="0" min="0" /></div>
+                <div><label>Carbs g</label><input type="number" id="cCarb" placeholder="0" min="0" /></div>
+                <div><label>Fat g</label><input type="number" id="cFat" placeholder="0" min="0" /></div>
+                <div><label>Sugar g</label><input type="number" id="cSug" placeholder="0" min="0" /></div>
+            </div>
+            <button class="btn-primary" style="width:100%" onclick="addCustomFood()">Add Custom Food</button>
+        </div>
+        <div class="mactions"><button class="btn-cancel" onclick="closeAddFood()">Close</button></div>
+    </div>
+</div>
+
+<script>
+// ──────────────────────────────────────────────
+// CONSTANTS
+// ──────────────────────────────────────────────
+const SLOTS = ['breakfast','lunch','tea','dinner','supper'];
+const SLOT_LABEL = { breakfast:'Breakfast', lunch:'Lunch', tea:'Tea Time', dinner:'Dinner', supper:'Supper' };
+const CAL_TARGET = 1600;
+
+const FOOD_DB = [
+    // ── Rice & Noodle Dishes ──
+    {n:'Chicken Rice',                cal:445, p:25, c:53, f:12, fi:1,  na:580,  su:1},
+    {n:'Roast Duck Rice',             cal:520, p:28, c:55, f:18, fi:1,  na:620,  su:2},
+    {n:'Braised Pork Rice',           cal:480, p:22, c:58, f:18, fi:1,  na:750,  su:3},
+    {n:'Char Siew Rice',              cal:500, p:24, c:55, f:18, fi:1,  na:680,  su:8},
+    {n:'Nasi Lemak',                  cal:510, p:14, c:68, f:22, fi:2,  na:520,  su:3},
+    {n:'Nasi Biryani',                cal:600, p:25, c:80, f:18, fi:2,  na:880,  su:3},
+    {n:'Fried Rice',                  cal:520, p:15, c:72, f:18, fi:1,  na:820,  su:2},
+    {n:'Economy Rice (mixed)',        cal:400, p:20, c:55, f:10, fi:2,  na:650,  su:2},
+    {n:'Cai Png (mixed rice)',        cal:420, p:18, c:58, f:12, fi:2,  na:680,  su:2},
+    {n:'Char Kway Teow',              cal:740, p:22, c:85, f:33, fi:2,  na:1200, su:3},
+    {n:'Hokkien Mee',                 cal:595, p:26, c:72, f:20, fi:2,  na:980,  su:2},
+    {n:'Mee Goreng',                  cal:640, p:20, c:88, f:22, fi:2,  na:1100, su:6},
+    {n:'Mee Rebus',                   cal:480, p:18, c:72, f:14, fi:3,  na:850,  su:8},
+    {n:'Mee Siam',                    cal:350, p:12, c:58, f:8,  fi:2,  na:780,  su:6},
+    {n:'Lor Mee',                     cal:520, p:20, c:70, f:15, fi:1,  na:950,  su:4},
+    {n:'Laksa',                       cal:590, p:22, c:63, f:26, fi:3,  na:1100, su:3},
+    {n:'Wonton Mee (dry)',            cal:440, p:18, c:65, f:11, fi:2,  na:850,  su:3},
+    {n:'Bak Chor Mee',                cal:490, p:22, c:65, f:13, fi:2,  na:920,  su:2},
+    {n:'Fish Ball Noodle Soup',       cal:330, p:18, c:53, f:5,  fi:1,  na:780,  su:1},
+    {n:'Prawn Noodle Soup',           cal:420, p:25, c:55, f:10, fi:1,  na:1050, su:1},
+    {n:'Braised Beef Noodle Soup',    cal:520, p:28, c:62, f:14, fi:2,  na:1200, su:2},
+    {n:'Dumpling Noodle Soup',        cal:380, p:18, c:50, f:10, fi:1,  na:820,  su:1},
+    {n:'Ipoh Hor Fun',                cal:380, p:18, c:52, f:10, fi:1,  na:720,  su:1},
+    {n:'Yong Tau Foo (bowl)',         cal:380, p:22, c:52, f:10, fi:3,  na:680,  su:2},
+    {n:'Bak Kut Teh',                 cal:420, p:30, c:15, f:25, fi:0,  na:1050, su:1},
+    {n:'Roti Prata (plain)',          cal:190, p:5,  c:28, f:7,  fi:1,  na:280,  su:1},
+    {n:'Roti Prata (egg)',            cal:250, p:9,  c:28, f:11, fi:1,  na:320,  su:1},
+    {n:'Murtabak (1 piece)',          cal:550, p:28, c:55, f:22, fi:2,  na:580,  su:2},
+    {n:'Biryani Rice (plain)',        cal:300, p:6,  c:58, f:5,  fi:1,  na:180,  su:0},
+    // ── Hawker Snacks & Sides ──
+    {n:'Satay (per stick)',           cal:70,  p:7,  c:3,  f:3,  fi:0,  na:120,  su:2},
+    {n:'Popiah (1 roll)',             cal:140, p:5,  c:20, f:4,  fi:2,  na:280,  su:3},
+    {n:'Rojak',                       cal:310, p:9,  c:43, f:12, fi:2,  na:380,  su:10},
+    {n:'Chee Cheong Fun',             cal:300, p:7,  c:50, f:8,  fi:1,  na:420,  su:3},
+    {n:'Carrot Cake (white)',         cal:350, p:8,  c:45, f:16, fi:1,  na:480,  su:1},
+    {n:'Carrot Cake (black)',         cal:380, p:8,  c:50, f:17, fi:1,  na:520,  su:4},
+    {n:'Oyster Omelette (Orh Luak)', cal:320, p:12, c:28, f:18, fi:1,  na:580,  su:2},
+    {n:'Curry Puff (1 piece)',        cal:230, p:6,  c:28, f:10, fi:1,  na:380,  su:1},
+    {n:'BBQ Chicken Wings (2 pcs)',   cal:320, p:28, c:5,  f:20, fi:0,  na:420,  su:3},
+    {n:'BBQ Chicken Drumstick Rice', cal:620, p:35, c:60, f:22, fi:1,  na:780,  su:3},
+    // ── Dim Sum ──
+    {n:'Char Siew Bao (1)',           cal:180, p:8,  c:26, f:5,  fi:1,  na:280,  su:5},
+    {n:'Siew Mai (1 piece)',          cal:50,  p:4,  c:4,  f:2,  fi:0,  na:120,  su:1},
+    {n:'Ha Gow / Har Gao (1 piece)',  cal:40,  p:3,  c:5,  f:1,  fi:0,  na:100,  su:0},
+    {n:'Cheung Fun (1 roll)',         cal:80,  p:4,  c:12, f:2,  fi:0,  na:180,  su:1},
+    {n:'Liu Sha Bao (1)',             cal:220, p:5,  c:28, f:10, fi:0,  na:150,  su:8},
+    // ── Bread & Breakfast ──
+    {n:'Kaya Toast',                  cal:245, p:6,  c:34, f:10, fi:1,  na:220,  su:8},
+    {n:'Peanut Butter Toast',         cal:200, p:7,  c:22, f:9,  fi:2,  na:180,  su:4},
+    {n:'Bread (1 slice)',             cal:80,  p:3,  c:14, f:1,  fi:1,  na:130,  su:2},
+    {n:'Croissant',                   cal:280, p:5,  c:31, f:15, fi:1,  na:220,  su:4},
+    {n:'Soft Boiled Egg',             cal:70,  p:6,  c:0,  f:5,  fi:0,  na:65,   su:0},
+    {n:'Fried Egg',                   cal:90,  p:6,  c:0,  f:7,  fi:0,  na:70,   su:0},
+    {n:'Oatmeal (1 bowl)',            cal:150, p:5,  c:27, f:3,  fi:4,  na:105,  su:1},
+    {n:'Yogurt (1 cup)',              cal:100, p:8,  c:12, f:2,  fi:0,  na:85,   su:8},
+    // ── Hot Drinks ──
+    {n:'Teh Tarik',                   cal:100, p:3,  c:16, f:3,  fi:0,  na:35,   su:12},
+    {n:'Teh-O',                       cal:30,  p:0,  c:7,  f:0,  fi:0,  na:5,    su:7},
+    {n:'Teh-O Kosong',                cal:5,   p:0,  c:1,  f:0,  fi:0,  na:5,    su:0},
+    {n:'Kopi',                        cal:60,  p:1,  c:10, f:2,  fi:0,  na:10,   su:8},
+    {n:'Kopi-O',                      cal:35,  p:0,  c:7,  f:0,  fi:0,  na:5,    su:7},
+    {n:'Kopi-O Kosong',               cal:10,  p:0,  c:1,  f:0,  fi:0,  na:5,    su:0},
+    {n:'Milo',                        cal:130, p:3,  c:24, f:3,  fi:1,  na:95,   su:18},
+    {n:'Milo Dinosaur',               cal:200, p:4,  c:38, f:4,  fi:1,  na:120,  su:28},
+    {n:'Hot Chocolate',               cal:150, p:4,  c:25, f:4,  fi:1,  na:80,   su:20},
+    // ── Cold Drinks ──
+    {n:'Iced Milo',                   cal:150, p:3,  c:28, f:3,  fi:1,  na:100,  su:20},
+    {n:'Iced Kopi',                   cal:70,  p:1,  c:12, f:2,  fi:0,  na:10,   su:10},
+    {n:'Iced Teh',                    cal:110, p:2,  c:20, f:3,  fi:0,  na:10,   su:14},
+    {n:'Iced Lemon Tea',              cal:80,  p:0,  c:20, f:0,  fi:0,  na:5,    su:18},
+    {n:'Bubble Tea (full sugar)',      cal:350, p:3,  c:75, f:6,  fi:0,  na:80,   su:58},
+    {n:'Bubble Tea (no sugar)',        cal:150, p:2,  c:30, f:3,  fi:0,  na:60,   su:5},
+    {n:'Sugarcane Juice',             cal:130, p:0,  c:33, f:0,  fi:0,  na:15,   su:32},
+    {n:'Fresh Orange Juice (glass)',  cal:110, p:1,  c:26, f:0,  fi:0,  na:5,    su:22},
+    {n:'Soy Milk (250ml)',            cal:90,  p:6,  c:10, f:3,  fi:1,  na:90,   su:8},
+    {n:'Milk (250ml)',                cal:150, p:8,  c:12, f:8,  fi:0,  na:105,  su:12},
+    {n:'Yakult (1 bottle)',           cal:50,  p:1,  c:11, f:0,  fi:0,  na:15,   su:10},
+    {n:'Green Tea (unsweetened)',     cal:2,   p:0,  c:0,  f:0,  fi:0,  na:5,    su:0},
+    {n:'Long Jin Tea Large (0 sugar)', cal:3, p:0,  c:0,  f:0,  fi:0,  na:5,    su:0},
+    {n:'Coconut Water',               cal:46,  p:0,  c:9,  f:0,  fi:3,  na:105,  su:6},
+    {n:'100 Plus (can)',              cal:80,  p:0,  c:20, f:0,  fi:0,  na:55,   su:18},
+    {n:'Coca-Cola (can)',             cal:140, p:0,  c:39, f:0,  fi:0,  na:45,   su:39},
+    {n:'Red Bull (can)',              cal:110, p:1,  c:27, f:0,  fi:0,  na:100,  su:27},
+    {n:'Water',                       cal:0,   p:0,  c:0,  f:0,  fi:0,  na:0,    su:0},
+    // ── Desserts ──
+    {n:'Chendol',                     cal:280, p:3,  c:55, f:6,  fi:1,  na:45,   su:42},
+    {n:'Ice Kacang (ABC)',            cal:250, p:3,  c:52, f:4,  fi:1,  na:40,   su:38},
+    {n:'Tau Huay (soy pudding)',      cal:120, p:4,  c:22, f:2,  fi:0,  na:30,   su:14},
+    {n:'Ice Cream (1 scoop)',         cal:130, p:2,  c:17, f:6,  fi:0,  na:55,   su:14},
+    {n:'Waffle with Ice Cream',       cal:450, p:8,  c:62, f:18, fi:1,  na:180,  su:28},
+    {n:'Durian (1 seed ~80g)',        cal:140, p:2,  c:18, f:5,  fi:2,  na:2,    su:14},
+    {n:'Durian Puff (1 piece ~30g)', cal:77,  p:2,  c:9,  f:5,  fi:0,  na:55,   su:4},
+    {n:'Pisang Goreng (1 piece)',     cal:150, p:1,  c:22, f:7,  fi:2,  na:80,   su:10},
+    {n:'Ondeh Ondeh (1 piece)',       cal:60,  p:1,  c:11, f:1,  fi:0,  na:25,   su:7},
+    {n:'Kueh Lapis (1 piece)',        cal:90,  p:1,  c:14, f:3,  fi:0,  na:40,   su:8},
+    {n:'Egg Tart (1 piece)',          cal:200, p:4,  c:24, f:10, fi:0,  na:95,   su:12},
+    {n:'Pineapple Tart (1 piece)',    cal:80,  p:1,  c:11, f:4,  fi:0,  na:30,   su:6},
+    {n:'Orh Nee (yam paste)',         cal:350, p:4,  c:55, f:13, fi:3,  na:85,   su:28},
+    {n:'Tang Yuan (2 pieces)',        cal:150, p:2,  c:30, f:3,  fi:1,  na:30,   su:10},
+    // ── Fruits ──
+    {n:'Banana',                      cal:90,  p:1,  c:23, f:0,  fi:3,  na:1,    su:12},
+    {n:'Apple',                       cal:80,  p:0,  c:21, f:0,  fi:4,  na:2,    su:15},
+    {n:'Orange',                      cal:62,  p:1,  c:15, f:0,  fi:3,  na:0,    su:12},
+    {n:'Watermelon (1 slice)',        cal:85,  p:2,  c:21, f:0,  fi:1,  na:2,    su:17},
+    {n:'Papaya (1 cup)',              cal:55,  p:1,  c:14, f:0,  fi:3,  na:8,    su:8},
+    {n:'Mango (1 cup)',               cal:100, p:1,  c:25, f:1,  fi:3,  na:2,    su:22},
+    // ── Fast Food ──
+    {n:"McDonald's McSpicy",          cal:470, p:28, c:40, f:21, fi:2,  na:820,  su:6},
+    {n:"McDonald's McChicken",        cal:370, p:15, c:39, f:17, fi:2,  na:680,  su:7},
+    {n:"McDonald's Fries (M)",        cal:340, p:4,  c:44, f:16, fi:3,  na:420,  su:1},
+    {n:'KFC Original (1 piece)',      cal:390, p:28, c:18, f:22, fi:1,  na:780,  su:1},
+    {n:'Subway 6-inch Chicken',       cal:380, p:28, c:44, f:8,  fi:5,  na:720,  su:8},
+    {n:'Pizza (1 slice)',             cal:280, p:12, c:34, f:10, fi:2,  na:650,  su:4},
+    {n:'Burger (regular)',            cal:350, p:16, c:38, f:14, fi:2,  na:580,  su:6},
+    // ── Generic / Home Cooking ──
+    {n:'White Rice (1 cup)',          cal:240, p:5,  c:52, f:0,  fi:0,  na:5,    su:0},
+    {n:'Brown Rice (1 cup)',          cal:220, p:5,  c:46, f:2,  fi:2,  na:5,    su:0},
+    {n:'Chicken Breast (100g)',       cal:165, p:31, c:0,  f:4,  fi:0,  na:75,   su:0},
+    {n:'Salmon (100g)',               cal:208, p:20, c:0,  f:13, fi:0,  na:62,   su:0},
+    {n:'Tofu (100g)',                 cal:76,  p:8,  c:2,  f:4,  fi:0,  na:8,    su:0},
+    {n:'Salad (no dressing)',         cal:50,  p:3,  c:8,  f:1,  fi:3,  na:45,   su:3},
+    {n:'Biscuits (10 pcs)',           cal:160, p:2,  c:24, f:6,  fi:1,  na:120,  su:8},
+    {n:'Potato Chips (small)',        cal:150, p:2,  c:16, f:9,  fi:1,  na:160,  su:1},
+    // ── More Dim Sum ── (idx 111)
+    {n:'Sesame Oil Dumpling (per pc)',  cal:47,  p:2,  c:5,  f:2,  fi:0, na:63,  su:1},
+    {n:'Pan-fried Dumplings / Guo Tie (4 pcs)', cal:280, p:12, c:28, f:12, fi:1, na:420, su:2},
+    {n:'Xiao Long Bao (per pc)',       cal:55,  p:3,  c:5,  f:2,  fi:0,  na:93,   su:0},
+    // ── More Bubble Tea & Specialty Drinks ── (idx 114)
+    {n:'Honey Oolong Milk Tea',       cal:280, p:3,  c:52, f:6,  fi:0,  na:60,   su:38},
+    {n:'Brown Sugar Boba Milk Tea',   cal:380, p:5,  c:70, f:8,  fi:0,  na:80,   su:52},
+    {n:'Taro Milk Tea',               cal:320, p:4,  c:58, f:8,  fi:0,  na:65,   su:44},
+    {n:'Matcha Milk Tea',             cal:280, p:4,  c:50, f:7,  fi:0,  na:55,   su:36},
+    {n:'Jasmine Green Milk Tea',      cal:250, p:3,  c:46, f:6,  fi:0,  na:50,   su:32},
+    {n:'Earl Grey Milk Tea',          cal:260, p:3,  c:48, f:6,  fi:0,  na:55,   su:34},
+    {n:'Strawberry Fruit Tea',        cal:200, p:1,  c:46, f:0,  fi:0,  na:40,   su:38},
+    {n:'Peach Oolong Tea',            cal:160, p:0,  c:38, f:0,  fi:0,  na:35,   su:32},
+    {n:'Wintermelon Milk Tea',        cal:270, p:3,  c:50, f:7,  fi:0,  na:55,   su:36},
+    {n:'Cheese Tea',                  cal:220, p:4,  c:38, f:6,  fi:0,  na:65,   su:28},
+    // ── More Noodles & Soups ── (idx 124)
+    {n:'Ban Mian (handmade noodle soup)', cal:400, p:22, c:58, f:9,  fi:2,  na:850,  su:2},
+    {n:'Sliced Fish Soup with Bee Hoon', cal:280, p:28, c:30, f:6,  fi:1,  na:750,  su:1},
+    {n:'Mee Hoon Kueh',               cal:380, p:18, c:55, f:8,  fi:2,  na:820,  su:2},
+    {n:'Wonton Soup',                 cal:250, p:14, c:35, f:5,  fi:1,  na:680,  su:1},
+    {n:'Bak Kwa (2 slices)',          cal:310, p:18, c:38, f:9,  fi:0,  na:420,  su:22},
+    // ── Malay / Mixed Rice additions ── (idx 129)
+    {n:'Nasi Padang (mixed)',          cal:600, p:25, c:72, f:22, fi:2,  na:950,  su:3},
+    {n:'Rendang Chicken (1 pc)',       cal:360, p:28, c:8,  f:24, fi:1,  na:580,  su:3},
+    {n:'Rendang Beef (100g)',          cal:340, p:26, c:7,  f:23, fi:1,  na:520,  su:2},
+    {n:'Ayam Penyet (1 pc)',           cal:450, p:35, c:20, f:25, fi:1,  na:680,  su:2},
+    {n:'Lontong',                      cal:350, p:12, c:55, f:10, fi:3,  na:650,  su:3},
+    {n:'Mee Soto',                     cal:380, p:22, c:50, f:10, fi:2,  na:820,  su:2},
+    {n:'Soto Ayam',                    cal:280, p:22, c:25, f:10, fi:2,  na:750,  su:2},
+    {n:'Chicken Porridge (1 bowl)',    cal:200, p:15, c:30, f:4,  fi:1,  na:620,  su:1},
+    {n:'Plain Porridge / Congee',      cal:150, p:5,  c:30, f:2,  fi:0,  na:280,  su:0},
+    {n:'Teochew Porridge (with sides)',cal:250, p:14, c:35, f:7,  fi:2,  na:550,  su:1},
+    // ── More Snacks ── (idx 139)
+    {n:'Otah (1 piece)',               cal:70,  p:8,  c:3,  f:3,  fi:0,  na:280,  su:1},
+    {n:'Chwee Kueh (3 pcs)',           cal:150, p:3,  c:28, f:3,  fi:1,  na:350,  su:1},
+    {n:'Fishcake (1 slice)',           cal:35,  p:4,  c:2,  f:1,  fi:0,  na:180,  su:1},
+    // ── More Hot Drinks ── (idx 142)
+    {n:'Kopi Soya (coffee+soya milk)', cal:75,  p:3,  c:10, f:2,  fi:0,  na:25,   su:6},
+    {n:'Teh Soya (tea+soya milk)',     cal:70,  p:3,  c:9,  f:2,  fi:0,  na:20,   su:6},
+    {n:'Yuanyang (coffee+tea)',        cal:85,  p:2,  c:14, f:2,  fi:0,  na:20,   su:10},
+    {n:'Horlicks (hot)',               cal:140, p:5,  c:25, f:2,  fi:0,  na:80,   su:14},
+    // ── More Breakfast ── (idx 146)
+    {n:'French Toast',                 cal:220, p:7,  c:28, f:9,  fi:1,  na:280,  su:8},
+    {n:'Pandan Waffle',                cal:300, p:7,  c:48, f:9,  fi:1,  na:220,  su:12},
+    // ── No Sugar / Kosong Drinks ── (idx 148)
+    {n:'Americano',                    cal:10,  p:0,  c:1,  f:0,  fi:0,  na:5,    su:0},
+    {n:'Iced Americano',               cal:10,  p:0,  c:1,  f:0,  fi:0,  na:5,    su:0},
+    {n:'Cold Brew Coffee',             cal:5,   p:0,  c:1,  f:0,  fi:0,  na:5,    su:0},
+    {n:'Kopi Kosong (coffee+milk)',    cal:40,  p:1,  c:4,  f:2,  fi:0,  na:15,   su:0},
+    {n:'Kopi C Kosong (coffee+evap milk)', cal:30, p:1, c:3, f:1, fi:0,  na:12,   su:0},
+    {n:'Teh Kosong (tea+milk)',        cal:35,  p:1,  c:4,  f:2,  fi:0,  na:12,   su:0},
+    {n:'Teh C Kosong (tea+evap milk)', cal:25,  p:1,  c:3,  f:1,  fi:0,  na:10,   su:0},
+    {n:'Milo Kosong (no sugar)',       cal:80,  p:3,  c:14, f:2,  fi:1,  na:75,   su:8},
+    {n:'Yuanyang Kosong (no sugar)',   cal:15,  p:1,  c:2,  f:0,  fi:0,  na:12,   su:0},
+    {n:'Soya Milk Kosong (unsweetened)', cal:60, p:5,  c:5,  f:2,  fi:1,  na:85,  su:0},
+    {n:'Barley Water (unsweetened)',   cal:25,  p:0,  c:6,  f:0,  fi:0,  na:5,    su:0},
+    {n:'Chrysanthemum Tea (unsweetened)', cal:5, p:0,  c:1,  f:0,  fi:0,  na:2,   su:0},
+    // ── Extra dishes ── (idx 160)
+    {n:'Har Cheong Gai / Prawn Paste Chicken (1 pc)', cal:280, p:22, c:5,  f:19, fi:0, na:580, su:1},
+    {n:'Otah-Otah (1 pc)',             cal:70,  p:8,  c:3,  f:3,  fi:0,  na:280,  su:1},
+    {n:'Chwee Kueh (1 pc)',            cal:50,  p:1,  c:9,  f:1,  fi:0,  na:120,  su:0},
+    {n:'Muah Chee (100g)',             cal:210, p:4,  c:40, f:4,  fi:1,  na:80,   su:12},
+    {n:'Kueh Tutu (1 pc)',             cal:70,  p:1,  c:14, f:1,  fi:0,  na:30,   su:5},
+    {n:'Ang Ku Kueh (1 pc)',           cal:120, p:2,  c:22, f:3,  fi:1,  na:45,   su:8},
+    // ── Nuts & Seeds ──
+    {n:"Cashew Nuts - Nature's Wonders (per pc)", cal:30.8, p:1.0, c:1.2, f:2.4, fi:0.2, na:0, su:0.4},
+    {n:'Almonds (per pc)',              cal:7,  p:0.3,c:0.2,f:0.6,fi:0,  na:0,    su:0},
+    {n:'Macadamia Nuts (per pc)',       cal:21, p:0.2,c:0.4,f:2.2,fi:0,  na:0,    su:0},
+    {n:'Walnut (1 half)',               cal:13, p:0.3,c:0.3,f:1.3,fi:0,  na:0,    su:0},
+    {n:'Peanuts (30g)',                 cal:168,p:7,  c:5,  f:14, fi:2,  na:5,    su:1},
+    {n:'Mixed Nuts (30g)',              cal:178,p:5,  c:6,  f:16, fi:2,  na:45,   su:1},
+    {n:'Pistachios (10 pcs)',           cal:57, p:2,  c:3,  f:5,  fi:1,  na:40,   su:1},
+    {n:'Sunflower Seeds (1 tbsp)',      cal:51, p:2,  c:2,  f:4,  fi:1,  na:45,   su:0},
+    // ── Local Western (hawker-style) ── (idx 174)
+    {n:'BBQ Chicken Chop',              cal:650, p:40, c:45, f:25, fi:2,  na:680,  su:8},
+    {n:'Chicken Chop (grilled)',         cal:520, p:38, c:30, f:22, fi:1,  na:520,  su:3},
+    {n:'Pork Chop',                      cal:550, p:35, c:35, f:22, fi:1,  na:580,  su:3},
+    {n:'Fish & Chips',                   cal:800, p:32, c:70, f:38, fi:3,  na:820,  su:2},
+    {n:'Mushroom Chicken Chop',          cal:580, p:38, c:32, f:24, fi:2,  na:560,  su:2},
+    {n:'Spaghetti Bolognese',            cal:520, p:24, c:62, f:16, fi:4,  na:680,  su:8},
+    {n:'Chicken Cutlet Rice',            cal:580, p:36, c:52, f:18, fi:1,  na:620,  su:3},
+    {n:'Black Pepper Chicken Chop',      cal:620, p:40, c:42, f:24, fi:1,  na:680,  su:2},
+    {n:'Cream of Mushroom Soup',         cal:180, p:4,  c:18, f:10, fi:1,  na:580,  su:3},
+    // ── Matcha Drinks ── (idx 183)
+    {n:'Hot Matcha',                      cal:55,  p:2,  c:11, f:0,  fi:1,  na:15,   su:8},
+    {n:'Iced Matcha',                     cal:65,  p:2,  c:13, f:0,  fi:1,  na:15,   su:8},
+    {n:'Hot Matcha Latte',                cal:180, p:8,  c:20, f:7,  fi:1,  na:80,   su:10},
+    {n:'Iced Matcha Latte',               cal:200, p:9,  c:22, f:8,  fi:1,  na:80,   su:10},
+    // ── Japanese ── (idx 187)
+    {n:'Kaisendon (seafood rice bowl)',    cal:520, p:35, c:65, f:11, fi:2,  na:680,  su:3},
+    {n:'Salmon Don',                       cal:520, p:30, c:65, f:14, fi:2,  na:580,  su:2},
+    {n:'Tuna Don',                         cal:480, p:32, c:62, f:8,  fi:2,  na:560,  su:2},
+    {n:'Ikura Don (salmon roe bowl)',      cal:480, p:28, c:60, f:12, fi:1,  na:850,  su:2},
+    {n:'Chirashi Don',                     cal:540, p:35, c:66, f:12, fi:2,  na:650,  su:3},
+    {n:'Gyudon (beef rice bowl)',          cal:650, p:28, c:85, f:22, fi:2,  na:920,  su:8},
+    {n:'Oyakodon (chicken & egg bowl)',   cal:560, p:30, c:70, f:16, fi:2,  na:750,  su:6},
+    {n:'Katsudon (pork cutlet bowl)',      cal:720, p:30, c:80, f:28, fi:2,  na:880,  su:8},
+    {n:'Tendon (tempura rice bowl)',       cal:650, p:22, c:80, f:24, fi:2,  na:780,  su:3},
+    {n:'Unadon (grilled eel rice bowl)',   cal:560, p:28, c:72, f:16, fi:1,  na:780,  su:10},
+    {n:'Hitsumabushi Large (Man Man)',      cal:820, p:42, c:100,f:25, fi:1,  na:1200, su:15},
+    {n:'Japanese Curry Rice',             cal:650, p:22, c:88, f:20, fi:4,  na:820,  su:8},
+    {n:'Ramen (Tonkotsu)',                 cal:650, p:28, c:70, f:28, fi:2,  na:1800, su:4},
+    {n:'Ramen (Shoyu / Soy Sauce)',        cal:480, p:24, c:68, f:10, fi:2,  na:1650, su:3},
+    {n:'Ramen (Miso)',                     cal:550, p:24, c:72, f:18, fi:3,  na:1700, su:4},
+    {n:'Zaru Soba (cold buckwheat noodles)', cal:280, p:14, c:52, f:2, fi:3, na:480,  su:4},
+    {n:'Udon (hot, plain bowl)',           cal:380, p:14, c:70, f:4,  fi:3,  na:880,  su:3},
+    {n:'Yakisoba',                         cal:480, p:18, c:65, f:14, fi:3,  na:950,  su:6},
+    {n:'Salmon Nigiri (2 pcs)',            cal:140, p:10, c:18, f:4,  fi:0,  na:200,  su:1},
+    {n:'Salmon Sashimi (3 slices)',        cal:140, p:18, c:0,  f:8,  fi:0,  na:60,   su:0},
+    {n:'Tuna Sashimi (3 slices)',          cal:90,  p:18, c:0,  f:2,  fi:0,  na:55,   su:0},
+    {n:'Tempura Set (4 pcs)',              cal:550, p:20, c:52, f:28, fi:2,  na:680,  su:3},
+    {n:'Karaage (3 pcs)',                  cal:310, p:22, c:14, f:18, fi:0,  na:480,  su:3},
+    {n:'Tonkatsu (1 piece)',               cal:420, p:28, c:22, f:24, fi:1,  na:580,  su:3},
+    {n:'Teriyaki Chicken',                 cal:290, p:28, c:14, f:12, fi:0,  na:680,  su:8},
+    {n:'Gyoza (4 pcs)',                    cal:240, p:12, c:22, f:12, fi:1,  na:480,  su:2},
+    {n:'Takoyaki (6 pcs)',                 cal:310, p:14, c:32, f:14, fi:1,  na:620,  su:4},
+    {n:'Edamame (100g)',                   cal:120, p:11, c:9,  f:5,  fi:5,  na:5,    su:1},
+    {n:'Miso Soup (1 bowl)',               cal:40,  p:3,  c:5,  f:1,  fi:1,  na:680,  su:1},
+    {n:'Miso Soup (small bowl)',           cal:20,  p:2,  c:3,  f:1,  fi:1,  na:340,  su:1},
+    {n:'Onigiri (1 pc)',                   cal:180, p:7,  c:35, f:2,  fi:1,  na:320,  su:1},
+    {n:'Yakitori (per skewer)',            cal:65,  p:7,  c:2,  f:3,  fi:0,  na:180,  su:2},
+    {n:'Okonomiyaki',                      cal:420, p:18, c:42, f:18, fi:2,  na:680,  su:6},
+    {n:'Chawanmushi (1 cup)',              cal:80,  p:7,  c:4,  f:4,  fi:0,  na:280,  su:1},
+    {n:'Kakiage (mixed tempura fritter)',  cal:300, p:6,  c:24, f:20, fi:2,  na:220,  su:2},
+    // ── More Breakfast & Snacks ── (idx 221)
+    {n:'Chocolate Bread (1 pc)',           cal:120, p:3,  c:18, f:4,  fi:1,  na:110,  su:7},
+    {n:'Fish Finger (1 pc)',               cal:55,  p:4,  c:5,  f:2,  fi:0,  na:120,  su:0},
+    // ── More Fruits ── (idx 223)
+    {n:'Blueberries 100g',                 cal:57,  p:1,  c:14, f:0,  fi:2,  na:1,    su:10},
+    {n:'Strawberries (100g)',              cal:32,  p:1,  c:8,  f:0,  fi:2,  na:1,    su:5},
+    {n:'Dragon Fruit (1/2 fruit)',         cal:90,  p:2,  c:20, f:1,  fi:3,  na:8,    su:10},
+    {n:'Tomato (1 medium)',                cal:22,  p:1,  c:5,  f:0,  fi:1,  na:6,    su:3},
+    {n:'Grapes 100g',                      cal:70,  p:1,  c:18, f:0,  fi:1,  na:2,    su:16},
+    {n:'Pineapple (1 slice)',              cal:50,  p:1,  c:13, f:0,  fi:1,  na:1,    su:10},
+    {n:'Kiwi (1 pc)',                      cal:48,  p:1,  c:11, f:0,  fi:2,  na:3,    su:7},
+    {n:'Pear (1 medium)',                  cal:100, p:1,  c:27, f:0,  fi:5,  na:2,    su:17},
+    {n:'Peach (1 medium)',                 cal:59,  p:1,  c:15, f:0,  fi:2,  na:0,    su:13},
+    {n:'Plum (1 pc)',                      cal:46,  p:1,  c:11, f:0,  fi:1,  na:0,    su:10},
+    {n:'Avocado (1/2 fruit)',              cal:120, p:1,  c:6,  f:11, fi:5,  na:5,    su:0},
+    {n:'Lychee (100g)',                    cal:66,  p:1,  c:17, f:0,  fi:1,  na:1,    su:15},
+    {n:'Longan (100g)',                    cal:60,  p:1,  c:15, f:0,  fi:1,  na:0,    su:15},
+    {n:'Guava (1 medium)',                 cal:60,  p:2,  c:14, f:1,  fi:5,  na:2,    su:9},
+    {n:'Pomelo (1 cup)',                   cal:72,  p:1,  c:18, f:0,  fi:2,  na:1,    su:14},
+    {n:'Rambutan (per pc)',                cal:11,  p:0,  c:3,  f:0,  fi:0,  na:1,    su:2},
+    {n:'Honeydew Melon (1 cup)',           cal:64,  p:1,  c:16, f:0,  fi:1,  na:31,   su:14},
+    {n:'Jackfruit (100g)',                 cal:95,  p:2,  c:23, f:1,  fi:2,  na:2,    su:20},
+    {n:'Star Fruit (1 medium)',            cal:30,  p:1,  c:7,  f:0,  fi:3,  na:2,    su:4},
+    {n:'Passion Fruit (1 pc)',             cal:17,  p:0,  c:4,  f:0,  fi:2,  na:5,    su:2},
+    {n:'Cherry (per pc)',                  cal:5,   p:0,  c:1,  f:0,  fi:0,  na:0,    su:1},
+    {n:'Raspberries (100g)',               cal:52,  p:1,  c:12, f:1,  fi:7,  na:1,    su:4},
+    {n:'Pomegranate (100g)',               cal:83,  p:2,  c:19, f:1,  fi:4,  na:3,    su:14},
+    {n:'Dates (per pc)',                   cal:66,  p:0,  c:18, f:0,  fi:2,  na:0,    su:16},
+    {n:'Grapefruit (1/2 fruit)',           cal:52,  p:1,  c:13, f:0,  fi:2,  na:0,    su:9},
+    {n:'Cantaloupe (1 cup)',               cal:54,  p:1,  c:13, f:0,  fi:1,  na:25,   su:13},
+    // ── Greek Yogurt ── (idx 250)
+    {n:'Greek Yogurt - Plain Unsweetened (100g)', cal:59, p:10, c:4,   f:0, fi:0, na:36, su:3},
+    {n:'Greek Yogurt - Full Fat (100g)',           cal:97, p:9,  c:4,   f:5, fi:0, na:47, su:4},
+    // ── Blueberry per piece ── (idx 252)
+    {n:'Blueberry / Blueberries (per pc)',          cal:1,  p:0,  c:0.2, f:0, fi:0.05, na:0,  su:0.1},
+    // ── Peanut Paste & Chia Seeds ── (idx 253)
+    {n:'Peanut Paste - Unsweetened & Unsalted (1 tbsp)', cal:94, p:4, c:3, f:8, fi:1, na:0,  su:1},
+    {n:'Chia Seeds (1 tbsp)',                            cal:58, p:2, c:5, f:4, fi:4, na:2,  su:0},
+    // ── Stuff'd Daily Bowls ── (idx 255)
+    {n:"Stuff'd Chicken Daily Bowl",                  cal:482, p:29, c:43, f:23, fi:6, na:900,  su:6},
+    {n:"Stuff'd Chicken Rendang Daily Bowl",          cal:470, p:30, c:42, f:20, fi:5, na:950,  su:7},
+    {n:"Stuff'd Beef Daily Bowl",                     cal:490, p:27, c:44, f:24, fi:6, na:850,  su:6},
+    {n:"Stuff'd Salmon Daily Bowl",                   cal:400, p:28, c:38, f:15, fi:5, na:1000, su:5},
+    // ── Stuff'd Add-ons / Extra Protein ── (idx 259)
+    {n:"Stuff'd Extra Chicken (1 portion)",           cal:224, p:16, c:7,  f:14, fi:3, na:420,  su:3},
+    {n:"Stuff'd Extra Chicken Rendang (1 portion)",   cal:210, p:23, c:6,  f:10, fi:0, na:545,  su:4},
+    {n:"Stuff'd Extra Beef (1 portion)",              cal:191, p:11, c:5,  f:0,  fi:1, na:342,  su:2},
+    {n:"Stuff'd Extra Salmon (1 portion)",            cal:82,  p:13, c:0,  f:3,  fi:0, na:549,  su:0},
+    // ── Steamed Dishes ── (idx 263)
+    {n:'Steamed Fish (1 serving)',                    cal:200, p:35, c:2,  f:5,  fi:0, na:650,  su:1},
+    // ── Combo Rice ── (idx 264)
+    {n:'Roast Duck & Char Siew Rice',                 cal:560, p:27, c:55, f:20, fi:1, na:720,  su:5},
+    // ── Chobani ── (idx 265)
+    {n:'Chobani Greek Yogurt (100g)',                 cal:59,  p:10, c:4,  f:0,  fi:0, na:36,   su:3},
+    // ── Home Cooking ── (idx 266)
+    {n:'Chicken Leg (1 pc)',                          cal:172, p:26, c:0,  f:8,  fi:0, na:85,   su:0},
+    {n:'Cordyceps Flower Soup with Vegetables, Morel Mushroom & Chicken Drumstick', cal:430, p:42, c:17, f:19, fi:5, na:300, su:4},
+    {n:'Vegetable Soup (1 bowl)',                     cal:90,  p:3,  c:12, f:2,  fi:4, na:180,  su:4},
+    {n:'Vegetable Soup with Chicken Drumstick (1 bowl)', cal:220, p:32, c:8,  f:8,  fi:5, na:200,  su:2},
+    // ── Taiwanese Street Food ── (idx 269)
+    {n:'Taiwanese Tempura (per pc)',                  cal:90,  p:7,  c:9,  f:3,  fi:0, na:350,  su:1},
+    {n:'Popcorn Chicken (per pc)',                    cal:50,  p:4,  c:3,  f:3,  fi:0, na:90,   su:0},
+    // ── Oolong Tea ── (idx 271)
+    {n:'Iced Oolong Tea (no sugar)',                  cal:2,   p:0,  c:0,  f:0,  fi:0, na:5,    su:0},
+    // ── Fried Chicken ── (idx 272)
+    {n:'Fried Chicken (1 pc)',                        cal:280, p:22, c:10, f:17, fi:0, na:480,  su:0},
+    // ── Roast Meats ── (idx 273)
+    {n:'Roast Chicken (100g)',                        cal:190, p:23, c:1,  f:11, fi:0, na:90,   su:1},
+    {n:'Roast Pork / Sio Bak (100g)',                 cal:320, p:17, c:2,  f:27, fi:0, na:490,  su:1},
+    // ── Roast Pork Rice ── (idx 275)
+    {n:'Roast Pork Rice',                             cal:510, p:22, c:52, f:22, fi:1, na:680,  su:2},
+    // ── Chicken Oil Rice ── (idx 276)
+    {n:'Chicken Oil Rice (1 bowl)',                   cal:300, p:5,  c:52, f:8,  fi:0, na:380,  su:0},
+    // ── More Dim Sum ── (idx 277)
+    {n:'Lo Mai Gai (1 pc)',                           cal:380, p:12, c:58, f:12, fi:1, na:520,  su:2},
+    {n:'Wu Kok / Taro Puff (1 pc)',                   cal:180, p:6,  c:16, f:10, fi:1, na:220,  su:1},
+    {n:'Steamed Spare Ribs / Pai Gwat (3 pcs)',       cal:160, p:14, c:4,  f:10, fi:0, na:380,  su:1},
+    {n:'Braised Chicken Feet / Fung Zao (per pc)',     cal:40,  p:3,  c:2,  f:2,  fi:0, na:107,  su:1},
+    {n:'Spring Roll (1 pc)',                          cal:130, p:4,  c:14, f:7,  fi:1, na:180,  su:1},
+    {n:'Lo Bak Go / Turnip Cake (1 pc)',              cal:110, p:2,  c:16, f:4,  fi:1, na:280,  su:1},
+    {n:'Drunken Chicken (1 bowl)',                    cal:180, p:28, c:3,  f:6,  fi:0, na:480,  su:2},
+    // ── Hawker Grills & Sides ── (idx 284)
+    {n:'BBQ Sambal Stingray (100g)',                  cal:130, p:20, c:5,  f:4,  fi:0, na:380,  su:2},
+    {n:'Sambal Petai (per pc)',                       cal:8,   p:0,  c:1,  f:0,  fi:0.15, na:18, su:0},
+    // ── KOI Drinks ── (idx 284)
+    {n:'KOI Ume Lemon Green Tea (no sugar)',          cal:20,  p:0,  c:5,  f:0,  fi:0, na:5,    su:3},
+    {n:'KOI Ume Lemon Green Tea Large (no sugar)',    cal:25,  p:0,  c:6,  f:0,  fi:0, na:5,    su:4},
+    // ── Grape per piece ── (idx 287)
+    {n:'Grape / Grapes (per pc)',                     cal:4,   p:0,  c:1.1,f:0,  fi:0.06, na:0, su:1.0},
+];
+
+const FOOD_CATS = [
+    { label: '🍚 Rice & Noodles',  fn: () => [...FOOD_DB.slice(0, 29),  ...FOOD_DB.slice(124, 139), FOOD_DB[160], FOOD_DB[264], FOOD_DB[275], FOOD_DB[276]] },
+    { label: '🍢 Snacks & Dim Sum',fn: () => [...FOOD_DB.slice(29, 43), ...FOOD_DB.slice(111, 114), ...FOOD_DB.slice(139, 142), ...FOOD_DB.slice(161, 174), FOOD_DB[222], FOOD_DB[269], FOOD_DB[270], ...FOOD_DB.slice(277, 284)] },
+    { label: '🥐 Breakfast',       fn: () => [...FOOD_DB.slice(43, 51), ...FOOD_DB.slice(146, 148), FOOD_DB[221], ...FOOD_DB.slice(250, 252), FOOD_DB[265]] },
+    { label: '☕ Hot Drinks',       fn: () => [...FOOD_DB.slice(51, 60), ...FOOD_DB.slice(142, 146), FOOD_DB[148], ...FOOD_DB.slice(151, 157), FOOD_DB[183], FOOD_DB[185]] },
+    { label: '🧋 Cold Drinks',      fn: () => [...FOOD_DB.slice(60, 77), ...FOOD_DB.slice(114, 124), ...FOOD_DB.slice(149, 151), ...FOOD_DB.slice(157, 160), FOOD_DB[184], FOOD_DB[186], FOOD_DB[269], FOOD_DB[284], FOOD_DB[285]] },
+    { label: '🍮 Desserts',        fn: () => FOOD_DB.slice(77, 90)  },
+    { label: '🍎 Fruits',          fn: () => [...FOOD_DB.slice(90, 96), ...FOOD_DB.slice(223, 250), FOOD_DB[252], FOOD_DB[287]] },
+    { label: '🍔 Fast Food',       fn: () => [...FOOD_DB.slice(96, 103), FOOD_DB[272]] },
+    { label: '🥗 Basics',          fn: () => [...FOOD_DB.slice(103, 111), ...FOOD_DB.slice(253, 255), FOOD_DB[263], FOOD_DB[266], FOOD_DB[267], FOOD_DB[268], FOOD_DB[273], FOOD_DB[274], FOOD_DB[284], FOOD_DB[285]] },
+    { label: '🍽️ Local Western',  fn: () => FOOD_DB.slice(174, 183)},
+    { label: '🫙 Bowls & Wraps',   fn: () => FOOD_DB.slice(255, 263)},
+    { label: '🍣 Japanese',        fn: () => FOOD_DB.slice(187, 221)},
+];
+
+// ──────────────────────────────────────────────
+// PROFILE
+// ──────────────────────────────────────────────
+let P = {
+    height: 173,
+    startWeight: 75.5,
+    targetWeight: 70,
+    targetDate: '2026-11-30',
+    startDate: '2026-04-25'
+};
+(function() { try { Object.assign(P, JSON.parse(localStorage.getItem('bt_goal') || '{}')); } catch(e){} })();
+
+// ──────────────────────────────────────────────
+// PROFILE EXTENSION (age, gender, activity)
+// ──────────────────────────────────────────────
+function loadProfileExt() {
+    return JSON.parse(localStorage.getItem('bt_profile') || '{"age":35,"height":173,"gender":"male","activity":1.375}');
+}
+function saveProfileExt() {
+    const age      = parseInt(document.getElementById('reqAge')?.value)        || 35;
+    const height   = parseInt(document.getElementById('reqHeight')?.value)     || 173;
+    const gender   = document.getElementById('reqGender')?.value               || 'male';
+    const activity = parseFloat(document.getElementById('reqActivity')?.value) || 1.375;
+    localStorage.setItem('bt_profile', JSON.stringify({ age, height, gender, activity }));
+}
+function initProfileExt() {
+    const ext = loadProfileExt();
+    const age = document.getElementById('reqAge');
+    const hgt = document.getElementById('reqHeight');
+    const gen = document.getElementById('reqGender');
+    const act = document.getElementById('reqActivity');
+    if (age) age.value = ext.age;
+    if (hgt) hgt.value = ext.height || P.height;
+    if (gen) gen.value = ext.gender;
+    if (act) act.value = ext.activity;
+}
+
+function calcReq(dateStr) {
+    const ext  = loadProfileExt();
+    const d    = load();
+    const cap  = dateStr || todayStr();
+    const wt   = d.entries.filter(e => e.weight != null && e.date <= cap).slice(-1)[0]?.weight || P.startWeight;
+    const ht   = ext.height || P.height;
+    const bmr  = ext.gender === 'male'
+        ? Math.round(10 * wt + 6.25 * ht - 5 * ext.age + 5)
+        : Math.round(10 * wt + 6.25 * ht - 5 * ext.age - 161);
+    const tdee = Math.round(bmr * ext.activity);
+
+    // Dynamic deficit — scales with goal pace, hard-capped for safety
+    const calFloor   = ext.gender === 'female' ? 1200 : 1500;
+    const tolose     = Math.max(0, wt - P.targetWeight);
+    const weeksLeft  = Math.max(1, (new Date(P.targetDate) - new Date(cap)) / (7 * 86400000));
+    const weeklyRate = Math.min(tolose / weeksLeft, 0.75); // cap at safe max 0.75 kg/wk
+    const deficit    = tolose <= 0 ? 0 : Math.round(Math.max(200, weeklyRate * 7700 / 7));
+    const goal       = Math.max(calFloor, tdee - deficit);
+    const kgPerWeek  = +(deficit * 7 / 7700).toFixed(2);
+
+    const protein = Math.round(wt * 1.8);
+    const fat     = Math.round(wt * 0.9);
+    const pCal    = protein * 4;
+    const fCal    = fat * 9;
+    const carbs   = Math.max(0, Math.round((goal - pCal - fCal) / 4));
+    const water   = Math.round(wt * 35);
+
+    return { wt, bmr, tdee, goal, deficit, kgPerWeek, protein, fat, carbs, water, ext };
+}
+
+let curDayDate = null;
+
+function renderDayView(dateStr) {
+    curDayDate = dateStr || todayStr();
+    const pick = document.getElementById('dayDatePick');
+    if (pick) pick.value = curDayDate;
+
+    const body = document.getElementById('dayBody');
+    if (!body) return;
+
+    const d   = load();
+    const raw = d.entries.find(x => x.date === curDayDate);
+    const e   = raw ? JSON.parse(JSON.stringify(raw)) : { date: curDayDate, weight: null, waist: null, mealItems: {} };
+    if (!e.mealItems) e.mealItems = {};
+    for (const s of SLOTS) if (!e.mealItems[s]) e.mealItems[s] = [];
+
+    const r    = calcReq(curDayDate);
+    const lbl  = document.getElementById('reqBMRLabel');
+    if (lbl) lbl.textContent = `BMR ${r.bmr} cal · TDEE ${r.tdee} cal`;
+
+    const isToday = curDayDate === todayStr();
+    const flat = Object.values(e.mealItems).flat();
+    const ate  = {
+        cal: Math.round(flat.reduce((s,x)=>s+(x.cal||0),0)),
+        p:   Math.round(flat.reduce((s,x)=>s+(x.p  ||0),0)),
+        c:   Math.round(flat.reduce((s,x)=>s+(x.c  ||0),0)),
+        f:   Math.round(flat.reduce((s,x)=>s+(x.f  ||0),0)*10)/10,
+        fi:  Math.round(flat.reduce((s,x)=>s+getItemFi(x),0)*10)/10,
+        na:  Math.round(flat.reduce((s,x)=>s+getItemNa(x),0)),
+        su:  Math.round(flat.reduce((s,x)=>s+getItemSu(x),0)),
+    };
+
+    // ── Vitals edit row ──
+    const vitals = `<div class="hist-meta" style="margin-bottom:12px">
+        <div class="hist-field">
+            <label>Weight</label>
+            <input class="hist-inp" type="number" id="hW_${curDayDate}" value="${e.weight??''}" placeholder="—" step="0.1" min="30" max="250" />
+            <span class="hist-unit">kg</span>
+            <button class="hist-savebtn" onclick="saveHistVital('${curDayDate}','weight')">Save</button>
+        </div>
+        <div class="hist-field">
+            <label>Waist</label>
+            <input class="hist-inp" type="number" id="hWs_${curDayDate}" value="${e.waist??''}" placeholder="—" step="0.5" min="50" max="200" />
+            <span class="hist-unit">cm</span>
+            <button class="hist-savebtn" onclick="saveHistVital('${curDayDate}','waist')">Save</button>
+        </div>
+        ${isToday ? '' : `<span style="font-size:11px;color:#aaa;margin-left:auto;align-self:center">${fmtDate(curDayDate)}</span>`}
+    </div>`;
+
+    // ── Water widget ──
+    const waterMl   = e.water || 0;
+    const waterBev  = calcWaterBev(e.mealItems);
+    const totalMl   = waterMl + waterBev;
+    const waterTgt  = r.water;
+    const totalPct  = Math.min(100, waterTgt > 0 ? totalMl/waterTgt*100 : 0);
+    const wFmt = ml => ml >= 1000 ? (ml/1000).toFixed(1)+'L' : ml+'ml';
+    const waterSection = `<div style="margin-bottom:14px;padding:10px 12px;background:#f0f8ff;border-radius:10px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+            <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#4fc3f7">💧 Water</span>
+            <span style="font-size:18px;font-weight:700;color:${totalPct>=100?'#0288d1':'#333'}">${wFmt(totalMl)}</span>
+            <span style="font-size:11px;color:#aaa">/ ${wFmt(waterTgt)} target</span>
+            <div style="flex:1;height:5px;background:#e0f2fe;border-radius:3px;min-width:60px">
+                <div style="height:5px;border-radius:3px;width:${totalPct.toFixed(0)}%;background:${totalPct>=100?'#0288d1':'#4fc3f7'};transition:width .4s"></div>
+            </div>
+            <span style="font-size:11px;font-weight:600;color:${totalPct>=100?'#0277bd':'#aaa'}">${totalPct>=100?'✓ Goal met':wFmt(Math.max(0,waterTgt-totalMl))+' to go'}</span>
+        </div>
+        <div style="display:flex;gap:16px;margin-bottom:8px;padding:0 2px">
+            <span style="font-size:12px;color:#555">🚰 Drinking water: <strong style="color:#0288d1">${wFmt(waterMl)}</strong></span>
+            <span style="font-size:12px;color:#555">🧃 From beverages: <strong style="color:#4fc3f7">${wFmt(waterBev)}</strong></span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <button class="addbtn" onclick="logWater('${curDayDate}',150)">+150ml</button>
+            <button class="addbtn" onclick="logWater('${curDayDate}',300)">+300ml</button>
+            <button class="addbtn" onclick="logWater('${curDayDate}',500)">+500ml</button>
+            <button class="addbtn" onclick="logWater('${curDayDate}',1000)">+1L</button>
+            <input type="number" id="wCust_${curDayDate}" placeholder="custom ml" min="1" max="5000"
+                style="width:90px;border:1.5px solid #b3e5fc;border-radius:7px;padding:4px 8px;font-size:12px;outline:none;font-family:inherit" />
+            <button class="hist-savebtn" style="background:#29b6f6" onclick="logWaterCustom('${curDayDate}')">Add</button>
+            ${waterMl>0?`<button class="btn-cancel" style="font-size:11px;padding:4px 8px;margin-left:auto" onclick="resetWater('${curDayDate}')">Reset</button>`:''}
+        </div>
+    </div>`;
+
+    // ── Nutrition requirements vs actual ──
+    const mRow = (name, note, target, eaten, unit, wantMore) => {
+        const rd   = v => parseFloat((+v).toFixed(2));
+        const de   = rd(eaten);
+        const pct  = target > 0 ? de / target * 100 : 0;
+        const diff = rd(target - de);
+        let bcls, tcls, status;
+        if (wantMore) {
+            bcls   = pct >= 100 ? 'rb-ok' : pct >= 70 ? 'rb-warn' : 'rb-over';
+            tcls   = pct >= 100 ? 'rcol-g' : pct >= 70 ? 'rcol-a' : 'rcol-r';
+            status = pct >= 100 ? '✓ Met' : `+${diff}${unit} needed`;
+        } else {
+            bcls   = pct <= 80 ? 'rb-ok' : pct <= 100 ? 'rb-warn' : 'rb-over';
+            tcls   = pct <= 80 ? 'rcol-g' : pct <= 100 ? 'rcol-a' : 'rcol-r';
+            status = diff >= 0 ? `${diff}${unit} left` : `${Math.abs(diff)}${unit} over`;
+        }
+        return `<tr>
+            <td><div class="req-name">${name}</div>${note?`<div class="req-note">${note}</div>`:''}
+            <div class="req-bar-wrap"><div class="req-bar ${bcls}" style="width:${Math.min(100,pct).toFixed(0)}%"></div></div></td>
+            <td class="req-val">${target}${unit}</td>
+            <td class="req-today" style="color:${de>0?'#333':'#ccc'}">${de||'—'}${de>0?unit:''}</td>
+            <td class="req-status ${de>0?tcls:'rcol-n'}">${de>0?status:'—'}</td>
+        </tr>`;
+    };
+    const rRow = (name, note, target, basis) => `<tr class="ref-row">
+        <td><div class="req-name">${name}</div>${note?`<div class="req-note">${note}</div>`:''}</td>
+        <td class="req-val">${target}</td>
+        <td colspan="2" class="ref-source">📋 ${basis}</td>
+    </tr>`;
+    const grp = lbl => `<tr><td colspan="4" class="req-group">${lbl}</td></tr>`;
+
+    const reqTable = `<table class="req-table" style="margin-bottom:14px">
+        <thead><tr><th>Nutrient</th><th class="r">Target</th><th class="r">${isToday?'Today':fmtDate(curDayDate)}</th><th class="r">Status</th></tr></thead>
+        <tbody>
+        ${grp('🔥 Calories')}
+        ${mRow('Calories (weight-loss target)',r.deficit===0?'Goal reached — maintenance calories':`${r.deficit} cal deficit → ~${r.kgPerWeek} kg/week loss`,r.goal,ate.cal,' cal',false)}
+        ${grp('💪 Macronutrients')}
+        ${mRow('Protein','Preserves muscle while cutting fat',r.protein,ate.p,'g',true)}
+        ${mRow('Carbohydrates','Primary energy — budget carefully',r.carbs,ate.c,'g',false)}
+        ${mRow('Fat','Hormones, cell health',r.fat,ate.f,'g',false)}
+        ${mRow('Fibre','Gut health & fullness',28,ate.fi,'g',true)}
+        ${grp('💧 Hydration & Limits')}
+        ${mRow('Water','More if exercising or hot weather',Math.round(r.water/100)*100,totalMl,' ml',true)}
+        ${mRow('Added sugar (max)','Drinks, sauces, desserts',25,ate.su,'g',false)}
+        ${mRow('Sodium (max)','High intake raises BP — target &lt;2,000mg',2000,ate.na,'mg',false)}
+        ${grp('🧪 Micronutrients — Recommended Daily Intake')}
+        <tr class="ref-row"><td colspan="4" class="ref-disclaimer">ℹ️ General adult guidelines for reference only. Not auto-tracked. Actual needs vary by age, gender and health condition.</td></tr>
+        ${rRow('Calcium','Bone density & muscle function','1,000 mg','Singapore RNI')}
+        ${rRow('Iron','Oxygen transport & energy','10 mg','Singapore RNI')}
+        ${rRow('Vitamin C','Immunity, collagen & iron absorption','75 mg','Singapore RNI')}
+        ${rRow('Vitamin D','Bone health & immunity','600 IU','Singapore RNI')}
+        ${rRow('Potassium','Heart health & blood pressure','3,500 mg','Singapore RNI')}
+        </tbody></table>`;
+
+    // ── Meals table ──
+    let tCal=0, tP=0, tC=0, tF=0, tSu=0, tNa=0, tFi=0;
+    const mealRows = SLOTS.map(slot => {
+        const items = e.mealItems[slot]||[];
+        const sCal=items.reduce((s,x)=>s+(x.cal||0),0);
+        const sP  =items.reduce((s,x)=>s+(x.p  ||0),0);
+        const sC  =items.reduce((s,x)=>s+(x.c  ||0),0);
+        const sF  =Math.round(items.reduce((s,x)=>s+(x.f  ||0),0)*10)/10;
+        const sSu =items.reduce((s,x)=>s+getItemSu(x),0);
+        const sNa =items.reduce((s,x)=>s+getItemNa(x),0);
+        const sFi =Math.round(items.reduce((s,x)=>s+getItemFi(x),0)*10)/10;
+        tCal+=sCal; tP+=sP; tC+=sC; tF+=sF; tSu+=sSu; tNa+=sNa; tFi=Math.round((tFi+sFi)*10)/10;
+        const chips = items.map((it,i)=>
+            `<span class="chip chip-${slot}">${it.n}<button class="xbtn" onclick="delFoodFromSlot('${slot}',${i},'${curDayDate}')">×</button></span>`
+        ).join('');
+        const nd = v => v?v:'<span style="color:#ddd">—</span>';
+        return `<tr>
+            <td class="nt-meal">${SLOT_LABEL[slot]}</td>
+            <td><div class="nt-foods">${chips}<button class="addbtn" onclick="openAddFood('${slot}','${curDayDate}')">+ Add</button></div></td>
+            <td class="ntd">${nd(sCal)}</td>
+            <td class="ntd">${sP?sP+'g':nd(0)}</td>
+            <td class="ntd">${sC?sC+'g':nd(0)}</td>
+            <td class="ntd">${sF?sF+'g':nd(0)}</td>
+            <td class="ntd">${sSu?sSu+'g':nd(0)}</td>
+            <td class="ntd">${sNa?sNa+'mg':nd(0)}</td>
+            <td class="ntd">${sFi?sFi+'g':nd(0)}</td>
+        </tr>`;
+    }).join('');
+
+    const calPct = Math.min(100, r.goal > 0 ? tCal/r.goal*100 : 0);
+    const barCls = calPct<80?'c-ok':calPct<=100?'c-warn':'c-over';
+    const calRem = r.goal - tCal;
+
+    const mealsSection = `
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#bbb;margin-bottom:8px">🍽 Meals</div>
+        <table class="nt">
+            <thead><tr>
+                <th style="min-width:72px">Meal</th><th>Food</th>
+                <th class="r" style="width:46px">Cal</th>
+                <th class="r" style="width:52px">Protein</th>
+                <th class="r" style="width:48px">Carbs</th>
+                <th class="r" style="width:42px">Fat</th>
+                <th class="r" style="width:46px">Sugar</th>
+                <th class="r" style="width:52px">Sodium</th>
+                <th class="r" style="width:46px">Fibre</th>
+            </tr></thead>
+            <tbody>${mealRows}</tbody>
+            <tfoot><tr class="tot">
+                <td>Total</td><td></td>
+                <td class="ntd">${tCal||'—'}</td>
+                <td class="ntd">${tP?tP+'g':'—'}</td>
+                <td class="ntd">${tC?tC+'g':'—'}</td>
+                <td class="ntd">${tF?tF+'g':'—'}</td>
+                <td class="ntd">${tSu?tSu+'g':'—'}</td>
+                <td class="ntd">${tNa?tNa+'mg':'—'}</td>
+                <td class="ntd">${tFi?tFi+'g':'—'}</td>
+            </tr></tfoot>
+        </table>
+        <div class="cbar-wrap" style="margin-top:10px">
+            <div class="cbar-bg"><div class="cbar-fill ${barCls}" style="width:${calPct.toFixed(0)}%"></div></div>
+            <div class="cbar-labels">
+                <span>${tCal} cal eaten</span>
+                <span style="color:${calRem>=0?'#888':'#e53935'}">${calRem>=0?`${calRem} cal remaining`:`Over by ${Math.abs(calRem)} cal`} · Goal: ${r.goal} cal</span>
+            </div>
+        </div>`;
+
+    body.innerHTML = vitals + waterSection + mealsSection + reqTable;
+}
+
+// keep old name as alias so any remaining callers don't break
+function renderReqTable() { renderDayView(curDayDate || todayStr()); }
+
+// ── stub: old renderReqTable body (now unused, replaced by renderDayView) ──
+function _oldRenderReqTable_unused() {
+    const r    = calcReq();
+    const body = document.getElementById('reqBody');
+    const lbl  = document.getElementById('reqBMRLabel');
+    if (!body) return;
+    if (lbl) lbl.textContent = `BMR ${r.bmr} cal · TDEE ${r.tdee} cal`;
+
+    // Today's actual totals from all meal slots
+    const e    = getTodayEntry();
+    const flat = Object.values(e.mealItems || {}).flat();
+    const ate  = {
+        cal: flat.reduce((s,x) => s+(x.cal||0), 0),
+        p:   flat.reduce((s,x) => s+(x.p  ||0), 0),
+        c:   flat.reduce((s,x) => s+(x.c  ||0), 0),
+        f:   flat.reduce((s,x) => s+(x.f  ||0), 0),
+    };
+
+    // Tracked macro row — shows target, actual, progress bar + status
+    const mRow = (name, note, target, eaten, unit, wantMore) => {
+        const pct  = target > 0 ? eaten / target * 100 : 0;
+        const diff = target - eaten;
+        let bcls, tcls, status;
+        if (wantMore) {
+            // Protein: want to REACH the target
+            bcls   = pct >= 100 ? 'rb-ok' : pct >= 70 ? 'rb-warn' : 'rb-over';
+            tcls   = pct >= 100 ? 'rcol-g' : pct >= 70 ? 'rcol-a' : 'rcol-r';
+            status = pct >= 100 ? '✓ Met' : `+${diff}${unit} needed`;
+        } else {
+            // Calories / carbs / fat: want to stay UNDER target
+            bcls   = pct <= 80 ? 'rb-ok' : pct <= 100 ? 'rb-warn' : 'rb-over';
+            tcls   = pct <= 80 ? 'rcol-g' : pct <= 100 ? 'rcol-a' : 'rcol-r';
+            status = diff >= 0 ? `${diff}${unit} left` : `${Math.abs(diff)}${unit} over`;
+        }
+        const barW = Math.min(100, pct).toFixed(0);
+        return `<tr>
+            <td>
+                <div class="req-name">${name}</div>
+                ${note ? `<div class="req-note">${note}</div>` : ''}
+                <div class="req-bar-wrap"><div class="req-bar ${bcls}" style="width:${barW}%"></div></div>
+            </td>
+            <td class="req-val">${target}${unit}</td>
+            <td class="req-today" style="color:${eaten>0?'#333':'#ccc'}">${eaten || '—'}${eaten>0?unit:''}</td>
+            <td class="req-status ${eaten>0?tcls:'rcol-n'}">${eaten>0?status:'not logged'}</td>
+        </tr>`;
+    };
+
+    // Reference-only row — target shown, no tracking
+    const rRow = (name, note, target, basis) => `<tr>
+        <td><div class="req-name">${name}</div>${note?`<div class="req-note">${note}</div>`:''}</td>
+        <td class="req-val">${target}</td>
+        <td class="req-today" style="color:#ddd">—</td>
+        <td class="req-status rcol-n" style="font-size:10px;font-weight:400">${basis}</td>
+    </tr>`;
+
+    const grp = label => `<tr><td colspan="4" class="req-group">${label}</td></tr>`;
+
+    body.innerHTML =
+        grp('🔥 Calories') +
+        mRow('Calories (weight-loss target)', r.deficit===0?'Goal reached — maintenance calories':`${r.deficit} cal deficit → ~${r.kgPerWeek} kg/week loss`, r.goal, ate.cal, ' cal', false) +
+
+        grp('💪 Macronutrients') +
+        mRow('Protein',       'Preserves muscle while cutting fat',     r.protein, ate.p, 'g', true) +
+        mRow('Carbohydrates', 'Primary energy — budget carefully',      r.carbs,   ate.c, 'g', false) +
+        mRow('Fat',           'Hormones, cell health, fat-sol. vitamins',r.fat,    ate.f, 'g', false) +
+        rRow('Fibre',         'Gut health, fullness, blood sugar control','25–30g', 'WHO guideline') +
+
+        grp('💧 Hydration & Limits') +
+        rRow('Water',              'More if exercising or hot weather',       `${(r.water/1000).toFixed(1)} L`, `35 ml × ${r.wt} kg`) +
+        rRow('Added sugar (max)',  'Incl. drinks, sauces, desserts',          '&lt; 25g',     'WHO recommendation') +
+        rRow('Sodium (max)',       'High intake raises blood pressure',        '&lt; 2,000mg', 'HPB Singapore') +
+
+        grp('🧪 Micronutrients (daily reference — not auto-tracked)') +
+        rRow('Calcium',    'Bone density & muscle function',   '1,000mg', 'Singapore RNI') +
+        rRow('Iron',       'Oxygen transport, energy levels',  '10mg',    'Singapore RNI') +
+        rRow('Vitamin C',  'Immunity, collagen, iron absorption','75mg',  'Singapore RNI') +
+        rRow('Vitamin D',  'Bone health, immunity',            '600 IU',  'Singapore RNI') +
+        rRow('Potassium',  'Heart health, blood pressure',     '3,500mg', 'Singapore RNI');
+}
+
+// ──────────────────────────────────────────────
+// STORAGE
+// ──────────────────────────────────────────────
+function load() {
+    return JSON.parse(localStorage.getItem('bt_data') || '{"entries":[]}');
+}
+function save(d) { localStorage.setItem('bt_data', JSON.stringify(d)); }
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+
+function upsertEntry(entry) {
+    const d = load();
+    const i = d.entries.findIndex(e => e.date === entry.date);
+    if (i >= 0) {
+        if (entry.weight != null) d.entries[i].weight = entry.weight;
+        if (entry.waist  != null) d.entries[i].waist  = entry.waist;
+        if (entry.meals?.length)  d.entries[i].meals  = [...(d.entries[i].meals || []), ...entry.meals];
+    } else {
+        d.entries.push({ date: entry.date, weight: entry.weight ?? null, waist: entry.waist ?? null, meals: entry.meals || [], mealItems: { breakfast:[], lunch:[], tea:[], dinner:[], supper:[] } });
+        d.entries.sort((a, b) => a.date.localeCompare(b.date));
+    }
+    save(d);
+    refreshDashboard();
+}
+
+function getTodayEntry() {
+    const d = load();
+    let e = d.entries.find(x => x.date === todayStr());
+    if (!e) {
+        e = { date: todayStr(), weight: null, waist: null, meals: {}, mealItems: { breakfast:[], lunch:[], tea:[], dinner:[], supper:[] } };
+        d.entries.push(e);
+        d.entries.sort((a, b) => a.date.localeCompare(b.date));
+    }
+    if (!e.mealItems) e.mealItems = { breakfast:[], lunch:[], tea:[], dinner:[], supper:[] };
+    for (const s of SLOTS) if (!e.mealItems[s]) e.mealItems[s] = [];
+    const i = d.entries.findIndex(x => x.date === todayStr());
+    d.entries[i] = e;
+    save(d);
+    return e;
+}
+
+function getOrCreateEntry(dateKey) {
+    const d = load();
+    let e = d.entries.find(x => x.date === dateKey);
+    if (!e) {
+        e = { date: dateKey, weight: null, waist: null, water: 0, meals: [], mealItems: { breakfast:[], lunch:[], tea:[], dinner:[], supper:[] } };
+        d.entries.push(e);
+        d.entries.sort((a, b) => a.date.localeCompare(b.date));
+        save(d);
+    }
+    if (!e.mealItems) e.mealItems = { breakfast:[], lunch:[], tea:[], dinner:[], supper:[] };
+    if (e.water == null) e.water = 0;
+    for (const s of SLOTS) if (!e.mealItems[s]) e.mealItems[s] = [];
+    return e;
+}
+
+function logWater(dateKey, ml) {
+    getOrCreateEntry(dateKey);
+    const d = load();
+    const e = d.entries.find(x => x.date === dateKey);
+    e.water = Math.max(0, (e.water || 0) + ml);
+    save(d);
+    renderDayView(dateKey);
+}
+
+function logBeverageWater(dateKey, ml) {
+    getOrCreateEntry(dateKey);
+    const d = load();
+    const e = d.entries.find(x => x.date === dateKey);
+    e.waterBev = Math.max(0, (e.waterBev || 0) + ml);
+    save(d);
+    renderDayView(dateKey);
+}
+
+function logWaterCustom(dateKey) {
+    const inp = document.getElementById(`wCust_${dateKey}`);
+    const ml  = parseInt(inp?.value);
+    if (!ml || ml <= 0) return;
+    inp.value = '';
+    logWater(dateKey, ml);
+}
+
+function resetWater(dateKey) {
+    const d = load();
+    const e = d.entries.find(x => x.date === dateKey);
+    if (e) { e.water = 0; save(d); renderDayView(dateKey); }
+}
+
+function addFoodToSlot(slot, item, forDate) {
+    const dateKey = forDate || todayStr();
+    getOrCreateEntry(dateKey);
+    const d = load();
+    const e = d.entries.find(x => x.date === dateKey);
+    if (!e.mealItems) e.mealItems = {};
+    for (const s of SLOTS) if (!e.mealItems[s]) e.mealItems[s] = [];
+    e.mealItems[slot].push(item);
+    save(d);
+    renderDayView(dateKey);
+}
+
+function getItemBml(item) {
+    if (item.bml > 0) return item.bml;
+    // Recover for items logged before bml tracking: strip ×qty suffix, look up in DB
+    const m = item.n.match(/^(.+?)\s*×(\d+(?:\.\d+)?)$/);
+    const name = m ? m[1].trim() : item.n;
+    const qty  = m ? parseFloat(m[2]) : 1;
+    const found = FOOD_DB.find(x => x.n === name);
+    if (!found) return 0;
+    const bml = getBeverageML(found);
+    return bml > 0 ? Math.round(bml * qty) : 0;
+}
+
+function getItemSu(item) {
+    if (item.su != null) return item.su;
+    const m = item.n.match(/^(.+?)\s*×(\d+(?:\.\d+)?)$/);
+    const name = m ? m[1].trim() : item.n;
+    const qty  = m ? parseFloat(m[2]) : (item.cal && FOOD_DB.find(x=>x.n===name)?.cal ? item.cal / FOOD_DB.find(x=>x.n===name).cal : 1);
+    const found = FOOD_DB.find(x => x.n === name);
+    if (!found || found.su == null) return 0;
+    return Math.round(found.su * qty);
+}
+
+function getItemNa(item) {
+    if (item.na != null) return item.na;
+    const m = item.n.match(/^(.+?)\s*×(\d+(?:\.\d+)?)$/);
+    const name = m ? m[1].trim() : item.n;
+    const qty  = m ? parseFloat(m[2]) : (item.cal && FOOD_DB.find(x=>x.n===name)?.cal ? item.cal / FOOD_DB.find(x=>x.n===name).cal : 1);
+    const found = FOOD_DB.find(x => x.n === name);
+    if (!found || found.na == null) return 0;
+    return Math.round(found.na * qty);
+}
+
+function getItemFi(item) {
+    if (item.fi != null) return item.fi;
+    const m = item.n.match(/^(.+?)\s*×(\d+(?:\.\d+)?)$/);
+    const name = m ? m[1].trim() : item.n;
+    const qty  = m ? parseFloat(m[2]) : (item.cal && FOOD_DB.find(x=>x.n===name)?.cal ? item.cal / FOOD_DB.find(x=>x.n===name).cal : 1);
+    const found = FOOD_DB.find(x => x.n === name);
+    if (!found || found.fi == null) return 0;
+    return Math.round(found.fi * qty * 10) / 10;
+}
+
+function calcWaterBev(mealItems) {
+    let total = 0;
+    for (const s of SLOTS) for (const it of (mealItems[s] || [])) total += getItemBml(it);
+    return total;
+}
+
+function delFoodFromSlot(slot, idx, forDate) {
+    const dateKey = forDate || todayStr();
+    const d = load();
+    const e = d.entries.find(x => x.date === dateKey);
+    if (!e?.mealItems?.[slot]) return;
+    e.mealItems[slot].splice(idx, 1);
+    save(d);
+    renderDayView(dateKey);
+}
+
+// thin wrapper so chat NLP callers still work
+function renderNutritionTable() { renderDayView(curDayDate || todayStr()); }
+
+// ──────────────────────────────────────────────
+// ADD FOOD MODAL
+// ──────────────────────────────────────────────
+let curSlot = null, curAddDate = null, srList = [], selIdx = -1, selQty = 1;
+let _localLen = 0;
+let _browseAll = false;
+
+function renderFoodResultsAll() {
+    const res = document.getElementById('fres');
+    let html = '';
+    FOOD_CATS.forEach(cat => {
+        const items = cat.fn();
+        html += `<div class="cat-group-hdr">${cat.label}</div>`;
+        items.forEach(f => {
+            const gi = srList.findIndex(x => x === f);
+            if (gi >= 0) html += fItemHtml(f, gi, '');
+        });
+    });
+    res.innerHTML = html;
+    if (selIdx >= 0) document.getElementById(`fi${selIdx}`)?.scrollIntoView({ block: 'nearest' });
+}
+
+function openAddFood(slot, forDate) {
+    curSlot = slot; curAddDate = forDate || null; selIdx = -1; selQty = 1;
+    const label = curAddDate && curAddDate !== todayStr() ? ` (${fmtDate(curAddDate)})` : '';
+    document.getElementById('afTitle').textContent = 'Add to ' + SLOT_LABEL[slot] + label;
+    document.getElementById('fsi').value = '';
+    document.getElementById('cfields').classList.remove('open');
+    document.getElementById('afOverlay').classList.add('open');
+    searchFoods('');
+    setTimeout(() => document.getElementById('fsi').focus(), 80);
+}
+function closeAddFood() {
+    document.getElementById('afOverlay').classList.remove('open');
+    curSlot = null; selIdx = -1;
+}
+
+function fItemHtml(f, idx, suffix) {
+    const isSel = idx === selIdx;
+    const pRow  = isSel ? portionRowHtml(f) : '';
+    const rd    = v => parseFloat((v||0).toFixed(2));
+    return `<div class="fitem${isSel?' sel':''}" id="fi${idx}" onclick="selectFood(${idx})">
+        <div><div class="fname">${f.n}</div><div class="fmeta">${rd(f.p)}g protein · ${rd(f.c)}g carbs · ${rd(f.f)}g fat${f.su!=null?' · '+rd(f.su)+'g sugar':''}${f.fi!=null?' · '+rd(f.fi)+'g fibre':''}${f.na!=null?' · '+rd(f.na)+'mg sodium':''}${suffix||''}</div></div>
+        <div class="fcal">${Math.round(f.cal)} cal</div></div>${pRow}`;
+}
+
+function portionRowHtml(f) {
+    const cal  = Math.round(f.cal * selQty);
+    const prot = Math.round((f.p||0) * selQty);
+    const carb = Math.round((f.c||0) * selQty);
+    const fat  = Math.round((f.f||0) * selQty);
+    const sug  = Math.round((f.su||0) * selQty);
+    const sod  = Math.round((f.na||0) * selQty);
+    return `<div class="portion-row">
+        <span style="font-size:12px;color:#555;white-space:nowrap">Qty (servings):</span>
+        <input class="portion-input" type="number" id="pQtyIn" value="${selQty}" min="0.25" step="0.25"
+            oninput="updQty(this.value)" onclick="event.stopPropagation()" />
+        <span class="portion-info">${cal} cal · ${prot}g pro · ${carb}g carb · ${fat}g fat · ${sug}g sugar · ${sod}mg sodium</span>
+        <button class="portion-add" onclick="event.stopPropagation();confirmAdd()">Add ✓</button>
+    </div>`;
+}
+
+function renderFoodResults(local, online) {
+    const res = document.getElementById('fres');
+    let html = '';
+    if (local.length) {
+        if (online.length) html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#bbb;padding:4px 10px 4px">SG Food List</div>';
+        html += local.map((f, i) => fItemHtml(f, i, '')).join('');
+    }
+    if (online.length) {
+        html += `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#bbb;padding:8px 10px 4px">Open Food Facts <span style="font-weight:400;text-transform:none">(per 100 g)</span></div>`;
+        html += online.map((f, i) => fItemHtml(f, local.length + i, ' · per 100g')).join('');
+    }
+    if (!local.length && !online.length) {
+        html = '<div style="padding:12px;color:#ccc;font-size:12px;text-align:center">No match — try custom entry below ↓</div>';
+    }
+    res.innerHTML = html;
+}
+
+function selectFood(i) {
+    selIdx = (selIdx === i) ? -1 : i;
+    selQty = 1;
+    if (_browseAll) {
+        renderFoodResultsAll();
+    } else {
+        renderFoodResults(srList.slice(0, _localLen), srList.slice(_localLen));
+    }
+}
+
+function updQty(v) {
+    selQty = Math.max(0.25, parseFloat(v) || 1);
+    const f = srList[selIdx];
+    if (!f) return;
+    const pr = document.querySelector('.portion-row');
+    if (pr) pr.outerHTML = portionRowHtml(f);
+}
+
+function confirmAdd() {
+    if (!curSlot || selIdx < 0 || !srList[selIdx]) return;
+    const f = srList[selIdx];
+    const qty = selQty;
+    const bml = getBeverageML(f);
+    const waterAdded = bml > 0 ? Math.round(bml * qty) : 0;
+    addFoodToSlot(curSlot, {
+        n:   qty === 1 ? f.n : `${f.n} ×${qty}`,
+        cal: Math.round(f.cal * qty),
+        p:   Math.round((f.p||0) * qty),
+        c:   Math.round((f.c||0) * qty),
+        f:   Math.round((f.f||0) * qty),
+        su:  Math.round((f.su||0) * qty),
+        na:  Math.round((f.na||0) * qty),
+        fi:  Math.round((f.fi||0) * qty * 10) / 10,
+        bml: waterAdded,
+    }, curAddDate);
+    selIdx = -1;
+    closeAddFood();
+}
+
+async function fetchOpenFoodFacts(q) {
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&json=1&page_size=12&fields=product_name,nutriments`;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    try {
+        const res  = await fetch(url, { signal: ctrl.signal });
+        clearTimeout(t);
+        const data = await res.json();
+        return (data.products || [])
+            .filter(p => {
+                if (!p.product_name) return false;
+                const n = p.nutriments;
+                if (!n) return false;
+                // Accept any recognised energy field
+                return (n['energy-kcal_100g'] > 0) || (n['energy-kcal'] > 0) || (n['energy_100g'] > 0);
+            })
+            .slice(0, 6)
+            .map(p => {
+                const n = p.nutriments;
+                const cal = Math.round(
+                    n['energy-kcal_100g'] ||
+                    n['energy-kcal'] ||
+                    (n['energy_100g'] ? n['energy_100g'] / 4.184 : 0)
+                );
+                return {
+                    n:   p.product_name.length > 52 ? p.product_name.slice(0,49)+'…' : p.product_name,
+                    cal,
+                    p:   Math.round(n['proteins_100g']      || 0),
+                    c:   Math.round(n['carbohydrates_100g'] || 0),
+                    f:   Math.round(n['fat_100g']           || 0),
+                };
+            });
+    } catch { clearTimeout(t); return []; }
+}
+
+let offTimer = null;
+async function searchFoods(q) {
+    const ql = q.trim().toLowerCase();
+    selIdx = -1;
+    clearTimeout(offTimer);
+
+    if (!ql) {
+        _browseAll = true;
+        srList = [...FOOD_DB];
+        _localLen = FOOD_DB.length;
+        renderFoodResultsAll();
+        return;
+    }
+
+    _browseAll = false;
+    const local = FOOD_DB.filter(f => f.n.toLowerCase().includes(ql)).slice(0, 25);
+    _localLen = local.length;
+    srList = [...local];
+    renderFoodResults(local, []);
+
+    if (ql.length < 2) return;
+
+    document.getElementById('fres').insertAdjacentHTML('beforeend',
+        '<div id="offLoad" style="padding:8px 10px;color:#bbb;font-size:11px">Searching Open Food Facts…</div>');
+
+    offTimer = setTimeout(async () => {
+        const online = await fetchOpenFoodFacts(q);
+        document.getElementById('offLoad')?.remove();
+        _localLen = local.length;
+        srList = [...local, ...online];
+        renderFoodResults(local, online);
+    }, 400);
+}
+
+function pickFood(i) { if (!curSlot || !srList[i]) return; addFoodToSlot(curSlot, srList[i]); closeAddFood(); }
+
+function addCustomFood() {
+    if (!curSlot) return;
+    const nm = document.getElementById('cname').value.trim();
+    if (!nm) { alert('Please enter a food name.'); return; }
+    addFoodToSlot(curSlot, {
+        n: nm,
+        cal: parseInt(document.getElementById('cCal').value)  || 0,
+        p:   parseInt(document.getElementById('cPro').value)  || 0,
+        c:   parseInt(document.getElementById('cCarb').value) || 0,
+        f:   parseInt(document.getElementById('cFat').value)  || 0,
+        su:  parseInt(document.getElementById('cSug').value)  || 0,
+    }, curAddDate);
+    closeAddFood();
+}
+document.addEventListener('click', e => { if (e.target.id === 'afOverlay') closeAddFood(); });
+
+// ──────────────────────────────────────────────
+// DASHBOARD
+// ──────────────────────────────────────────────
+let wChart, wsChart;
+
+function cmToIn(cm)  { return (cm / 2.54).toFixed(1); }
+function inToCm(inch){ return parseFloat((inch * 2.54).toFixed(1)); }
+function bmiVal(w)  { const h = (loadProfileExt().height || P.height) / 100; return (w / h / h).toFixed(1); }
+function bmiLabel(b) {
+    b = parseFloat(b);
+    if (b < 18.5) return 'Underweight';
+    if (b < 23)   return 'Normal';
+    if (b < 27.5) return 'Overweight';
+    return 'Obese';
+}
+function fmtDate(s) {
+    return new Date(s + 'T00:00:00').toLocaleDateString('en-SG', { day: 'numeric', month: 'short' });
+}
+function chgHtml(curr, prev, unit) {
+    const d = parseFloat((curr - prev).toFixed(1));
+    if (Math.abs(d) < 0.05) return `<span class="change-flat">no change from last</span>`;
+    const good = d < 0;
+    return `<span class="${good ? 'change-down' : 'change-up'}">${d > 0 ? '+' : ''}${d} ${unit} from last</span>`;
+}
+
+// ──────────────────────────────────────────────
+// DAY NAVIGATION
+// ──────────────────────────────────────────────
+function initDayPicker() {
+    const pick = document.getElementById('dayDatePick');
+    if (!pick) return;
+    pick.max = todayStr();
+    renderDayView(todayStr());
+}
+
+function dayStep(dir) {
+    const pick = document.getElementById('dayDatePick');
+    if (!pick) return;
+    const base = pick.value || todayStr();
+    const d = new Date(base + 'T00:00:00');
+    d.setDate(d.getDate() + dir);
+    const s = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if (s > todayStr()) return;
+    renderDayView(s);
+}
+
+function saveHistVital(dateStr, field) {
+    const id  = field === 'weight' ? `hW_${dateStr}` : `hWs_${dateStr}`;
+    const val = parseFloat(document.getElementById(id)?.value);
+    if (isNaN(val) || val <= 0) return;
+    const d = load();
+    let e = d.entries.find(x => x.date === dateStr);
+    if (!e) {
+        e = { date: dateStr, weight: null, waist: null, meals: [], mealItems: { breakfast:[], lunch:[], tea:[], dinner:[], supper:[] } };
+        d.entries.push(e);
+        d.entries.sort((a, b) => a.date.localeCompare(b.date));
+    }
+    e[field] = val;
+    save(d);
+    refreshDashboard();
+    renderDayView(dateStr);
+}
+
+function showPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+    if (name === 'trends')   refreshDashboard();
+    if (name === 'insights') renderInsights();
+}
+
+function refreshDashboard() {
+    try { Object.assign(P, JSON.parse(localStorage.getItem('bt_goal') || '{}')); } catch(e){}
+    const tgtMonth = new Date(P.targetDate).toLocaleDateString('en-SG', { month:'long', year:'numeric' });
+    const goalEl = document.getElementById('goalTitle');
+    if (goalEl) goalEl.textContent = `Goal: ${P.targetWeight} kg by ${tgtMonth}`;
+
+    const d   = load();
+    const all = d.entries;
+    const we  = all.filter(e => e.weight != null);
+    const wse = all.filter(e => e.waist  != null);
+
+    if (we.length > 0) {
+        const lat = we[we.length - 1];
+        document.getElementById('sWeight').textContent = lat.weight.toFixed(1);
+        const b = bmiVal(lat.weight);
+        document.getElementById('sBMI').textContent = b;
+        document.getElementById('sBMILabel').textContent = bmiLabel(b);
+        if (we.length > 1) document.getElementById('sWeightChg').innerHTML = chgHtml(lat.weight, we[we.length-2].weight, 'kg');
+
+        const lost   = P.startWeight - lat.weight;
+        const needed = P.startWeight - P.targetWeight;
+        document.getElementById('sLost').textContent = Math.max(0, lost).toFixed(1);
+        document.getElementById('sLostSub').textContent = `of ${needed.toFixed(1)} kg needed`;
+
+        const pct     = Math.min(100, Math.max(0, lost / needed * 100));
+        const pctStr  = pct.toFixed(0) + '%';
+        document.getElementById('progressFill').style.width = pctStr;
+        document.getElementById('progressPct').textContent  = pctStr;
+
+        const rem      = (lat.weight - P.targetWeight).toFixed(1);
+        const daysLeft = Math.max(0, Math.ceil((new Date(P.targetDate) - new Date()) / 86400000));
+        const wksLeft  = Math.ceil(daysLeft / 7);
+        document.getElementById('progressLeft').textContent =
+            rem > 0 ? `${rem} kg remaining · ${wksLeft} weeks left` : 'Goal reached!';
+
+        const totalDays    = Math.ceil((new Date(P.targetDate) - new Date(P.startDate)) / 86400000);
+        const daysDone     = totalDays - daysLeft;
+        const expectedLost = (needed / totalDays) * daysDone;
+        let badgeText, badgeCls;
+        if (lost >= needed)                       { badgeText = 'Goal reached!';       badgeCls = 'badge-done';  }
+        else if (we.length === 1 && daysDone < 7) { badgeText = 'Just started';        badgeCls = 'badge-start'; }
+        else if (lost >= expectedLost * 1.1)      { badgeText = 'Ahead of schedule';   badgeCls = 'badge-ahead'; }
+        else if (lost >= expectedLost * 0.8)      { badgeText = 'On track';            badgeCls = 'badge-track'; }
+        else                                       { badgeText = 'Needs attention';     badgeCls = 'badge-behind';}
+        document.getElementById('progressBadge').innerHTML = `<span class="status-badge ${badgeCls}">${badgeText}</span>`;
+    }
+
+    if (wse.length > 0) {
+        const lat = wse[wse.length - 1];
+        document.getElementById('sWaist').textContent = lat.waist.toFixed(1);
+        document.getElementById('sWaistIn').textContent = cmToIn(lat.waist) + ' in';
+        if (wse.length > 1) document.getElementById('sWaistChg').innerHTML = chgHtml(lat.waist, wse[wse.length-2].waist, 'cm');
+    }
+
+    renderWeightChart(we);
+    if (wse.length > 0) {
+        document.getElementById('waistCardWrap').style.display = 'block';
+        renderWaistChart(wse);
+    }
+    renderDayView(curDayDate || todayStr());
+}
+
+function chartBase() {
+    return {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { grid: { display: false },         ticks: { font: { size: 10 }, color: '#bbb' } },
+            y: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 10 }, color: '#bbb' } }
+        }
+    };
+}
+
+function renderWeightChart(we) {
+    if (wChart) wChart.destroy();
+    const labels = we.slice(-24).map(e => fmtDate(e.date));
+    const data   = we.slice(-24).map(e => e.weight);
+    wChart = new Chart(document.getElementById('weightChart'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                { data, borderColor: '#667eea', backgroundColor: 'rgba(102,126,234,0.08)', borderWidth: 2, pointRadius: 4, pointBackgroundColor: '#667eea', tension: 0.35, fill: true },
+                { data: labels.map(() => P.targetWeight), borderColor: '#e57373', borderWidth: 1.5, borderDash: [6,4], pointRadius: 0, fill: false }
+            ]
+        },
+        options: { ...chartBase(), scales: { ...chartBase().scales, y: { ...chartBase().scales.y, suggestedMin: P.targetWeight - 1 } } }
+    });
+}
+
+function renderWaistChart(wse) {
+    if (wsChart) wsChart.destroy();
+    const labels = wse.slice(-24).map(e => fmtDate(e.date));
+    const data   = wse.slice(-24).map(e => e.waist);
+    wsChart = new Chart(document.getElementById('waistChart'), {
+        type: 'line',
+        data: { labels, datasets: [{ data, borderColor: '#764ba2', backgroundColor: 'rgba(118,75,162,0.08)', borderWidth: 2, pointRadius: 4, pointBackgroundColor: '#764ba2', tension: 0.35, fill: true }] },
+        options: chartBase()
+    });
+}
+
+
+// ──────────────────────────────────────────────
+// LOCAL SMART PARSER  (zero API, zero cost)
+// ──────────────────────────────────────────────
+
+function localDateStr(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function parseEntry(raw) {
+    const txt = raw.trim();
+    let weight = null, waist = null, water = 0, meals = [], slot = null, date = null;
+
+    // ── Date reference ──
+    const dl = txt.toLowerCase();
+    if (/\byesterday\b|\blast\s+night\b|\blast\s+evening\b/.test(dl)) {
+        const d = new Date(); d.setDate(d.getDate() - 1);
+        date = localDateStr(d);
+    } else if (/\b2\s+days?\s+ago\b|\bday\s+before\s+yesterday\b/.test(dl)) {
+        const d = new Date(); d.setDate(d.getDate() - 2);
+        date = localDateStr(d);
+    } else {
+        const m = dl.match(/\b(\d)\s+days?\s+ago\b/);
+        if (m && +m[1] >= 1 && +m[1] <= 7) {
+            const d = new Date(); d.setDate(d.getDate() - +m[1]);
+            date = localDateStr(d);
+        }
+    }
+
+    // ── Weight ──
+    for (const p of [
+        /(?:weight|weigh(?:ed)?|i(?:'m| am| weigh))\s*[:\s]\s*(\d{2,3}(?:\.\d{1,2})?)\s*kg/i,
+        /(\d{2,3}(?:\.\d{1,2})?)\s*kg\b/i,
+        /(\d{2,3}(?:\.\d{1,2})?)\s*kilogram/i,
+    ]) {
+        const m = txt.match(p);
+        if (m && +m[1] >= 30 && +m[1] <= 250) { weight = +m[1]; break; }
+    }
+
+    // ── Waist ──
+    for (const p of [
+        /waist(?:\s+(?:is|was|measurement|size))?\s*[:\s]\s*(\d{2,3}(?:\.\d{1,2})?)\s*cm/i,
+        /(\d{2,3}(?:\.\d{1,2})?)\s*cm\s*(?:waist|around)/i,
+    ]) {
+        const m = txt.match(p);
+        if (m && +m[1] >= 50 && +m[1] <= 200) { waist = +m[1]; break; }
+    }
+    if (waist == null) {
+        for (const p of [
+            /waist(?:\s+(?:is|was|size))?\s*[:\s]\s*(\d{2}(?:\.\d{1,2})?)\s*(?:inch(?:es)?|in\b|")/i,
+            /(\d{2}(?:\.\d{1,2})?)\s*(?:inch(?:es)?|in\b|")\s*(?:waist|around)/i,
+            /waist(?:\s+(?:is|was))?\s+(\d{2}(?:\.\d{1,2})?)\s*(?:inch(?:es)?|in\b|")/i,
+        ]) {
+            const m = txt.match(p);
+            if (m && +m[1] >= 20 && +m[1] <= 80) { waist = inToCm(+m[1]); break; }
+        }
+    }
+    if (waist == null) {
+        const m = txt.match(/waist(?:\s+(?:is|was))?\s+(\d{2,3}(?:\.\d{1,2})?)/i);
+        if (m && +m[1] >= 50 && +m[1] <= 200) waist = +m[1];
+    }
+
+    // ── Water ──
+    for (const {re, mul} of [
+        { re: /(\d+(?:\.\d+)?)\s*L(?:iter|itre)?s?\s*(?:of\s*)?water/i,           mul: 1000 },
+        { re: /water\s+(\d+(?:\.\d+)?)\s*L/i,                                     mul: 1000 },
+        { re: /(\d+)\s*ml\s*(?:of\s*)?water/i,                                    mul: 1 },
+        { re: /water\s+(\d+)\s*ml/i,                                               mul: 1 },
+        { re: /(\d+)\s*(?:cup|glass(?:es)?)\s*(?:of\s*)?water/i,                  mul: 250 },
+        { re: /(\d+)\s*bottle(?:s)?\s*(?:of\s*)?water/i,                          mul: 600 },
+        { re: /(?:drank?|drunk?|finished)\s+(\d+)\s*(?:cup|glass(?:es)?|bottle)/i, mul: 250 },
+    ]) {
+        const m = txt.match(re);
+        if (m) { water = Math.round(+m[1] * mul); break; }
+    }
+
+    // ── Slot detection (no bare "tea" — avoids matching drinks like bubble tea) ──
+    const sl = txt.toLowerCase();
+    if      (/\bbreakfast\b|\bmorning\b/.test(sl))               slot = 'breakfast';
+    else if (/\blunch\b|\bnoon\b|\bmidday\b/.test(sl))           slot = 'lunch';
+    else if (/\btea[\s-]?time\b|\bafternoon\b|\bsnack\b/.test(sl)) slot = 'tea';
+    else if (/\bdinner\b|\bevening\b/.test(sl))                  slot = 'dinner';
+    else if (/\bsupper\b|\blate[\s-]?night\b/.test(sl))         slot = 'supper';
+
+    // ── Meal extraction ──
+    // Step 1: strip vitals so they don't bleed into food text
+    let foodText = txt
+        .replace(/\d{2,3}(?:\.\d)?\s*kg\b/gi, '')
+        .replace(/waist[^\n,.;]*/gi, '')
+        .replace(/\d{2,3}(?:\.\d)?\s*(?:cm|in\b|inch(?:es)?)/gi, '')
+        .replace(/\d+(?:\.\d+)?\s*(?:L|ml|litre|liter)s?\s*(?:of\s*)?water/gi, '')
+        .replace(/\d+\s*(?:cup|glass(?:es)?|bottle)s?\s*(?:of\s*)?water/gi, '')
+        .replace(/(?:drank?|drunk?|finished)\s+\d+\s*(?:cup|glass(?:es)?|bottle)s?\b/gi, '')
+        .replace(/[.!?]/g, ' ')
+        .replace(/\s+/g, ' ').trim();
+
+    // Step 2: split on commas and " and " BEFORE any filler stripping
+    //         (old bug: stripping "and" first broke the split)
+    const RE_SLOT    = /\b(?:for\s+)?(?:breakfast|lunch|dinner|supper|brunch|morning|evening|afternoon|night|noon|snack|tea[\s-]?time)\b/gi;
+    const RE_FILLER  = /\b(?:i(?:'m| am| have| had)?|today|this|my|just|now|currently|already|also|had|ate|eaten?|having|eating|consumed?|drinking?|drank|cooked?|ordered?|bought?|got|grabbed?|took|went\s+for)\b/gi;
+    const RE_FILLER2 = /\b(?:for|the|a|an|some|also|with)\b/gi;
+    const RE_QTY_UNIT = /^(\d+(?:[./]\d+)?)\s*(?:piece|pc|pcs|serving|servings|bowl|bowls|plate|plates|cup|cups|portion|portions|order|orders|×|x)s?\s*(?:of\s+)?/i;
+    const RE_QTY_BARE = /^(\d+(?:\.\d+)?)\s+(?=[a-zA-Z])/;
+    const RE_ART     = /^(?:a|an|some|the)\s+/i;
+
+    const rawSegs = foodText.split(/,+|\s+and\s+/i).map(s => s.trim()).filter(Boolean);
+    // Combo merge: try joining adjacent pairs to detect combo dishes (e.g. "roast duck and char siew rice")
+    const cleanSeg = s => s.replace(RE_SLOT, ' ').replace(RE_FILLER, ' ').replace(RE_FILLER2, ' ').replace(/\s+/g, ' ').trim();
+    const segments = [];
+    for (let i = 0; i < rawSegs.length; i++) {
+        if (i + 1 < rawSegs.length && matchCombo(cleanSeg(rawSegs[i] + ' ' + rawSegs[i + 1]))) {
+            segments.push(rawSegs[i] + ' ' + rawSegs[i + 1]);
+            i++;
+        } else {
+            segments.push(rawSegs[i]);
+        }
+    }
+
+    // Step 3: clean each segment, then extract quantity
+    const seen = new Set();
+    for (const seg of segments) {
+        // Step A: strip filler/slot words FIRST so quantity number rises to the front
+        let cleaned = seg
+            .replace(RE_SLOT, ' ')
+            .replace(RE_FILLER, ' ')
+            .replace(RE_FILLER2, ' ')
+            .replace(/\s+/g, ' ').trim();
+
+        // Step B: extract quantity from cleaned text (number is now at front if present)
+        let qty = 1;
+        // Handle word-form fractions before numeric extraction
+        if (/^half\b/i.test(cleaned)) {
+            qty = 0.5;
+            cleaned = cleaned.replace(/^half\s+(?:(?:a|an)\s+)?(?:portion\s+)?/i, '').trim();
+        } else if (/^quarter\b/i.test(cleaned)) {
+            qty = 0.25;
+            cleaned = cleaned.replace(/^quarter\s+(?:(?:a|an)\s+)?(?:portion\s+)?/i, '').trim();
+        }
+        // Handle gram weights: "50g salmon" → qty=0.5 against a per-100g DB entry
+        // Only applies when the matched food is a per-100g entry — not a complete dish
+        const RE_QTY_GRAM = /^(\d+(?:\.\d+)?)\s*(?:grams?|g)\s+/i;
+        const gm = cleaned.match(RE_QTY_GRAM);
+        if (gm) {
+            const gramCleaned = cleaned.replace(RE_QTY_GRAM, '').trim();
+            const gramFood = matchFood(gramCleaned);
+            if (gramFood && gramFood.n.includes('100g')) {
+                qty = Math.round(parseFloat(gm[1]) / 100 * 100) / 100;
+            }
+            cleaned = gramCleaned;
+        } else {
+            // Handle suffix quantity: "durian puff x2" or "durian puff ×2"
+            const RE_QTY_SUFFIX = /\s*[x×]\s*(\d+(?:\.\d+)?)$/i;
+            const sm = cleaned.match(RE_QTY_SUFFIX);
+            if (sm) {
+                const n = parseFloat(sm[1]);
+                if (n >= 0.25 && n <= 50) qty = Math.round(n * 100) / 100;
+                cleaned = cleaned.replace(RE_QTY_SUFFIX, '').trim();
+            } else {
+                const qm = cleaned.match(RE_QTY_UNIT) || cleaned.match(RE_QTY_BARE);
+                if (qm) {
+                    const raw = qm[1];
+                    const n   = raw.includes('/') ? raw.split('/').reduce((a,b) => +a / +b) : parseFloat(raw);
+                    if (n >= 0.25 && n <= 50) qty = Math.round(n * 100) / 100;
+                }
+            }
+        }
+
+        // Step C: strip quantity prefix and article to get the food name
+        const s = cleaned
+            .replace(RE_QTY_UNIT, '')
+            .replace(RE_QTY_BARE, '')
+            .replace(RE_ART, '')
+            .trim();
+
+        if (s.length >= 2 && !/^\d+(\.\d+)?$/.test(s) && s.length < 80 && !seen.has(s.toLowerCase())) {
+            seen.add(s.toLowerCase());
+            meals.push({ name: s, qty });
+        }
+    }
+
+    return { weight, waist, water, meals, slot, date };
+}
+
+function isProgressQ(txt) {
+    const l = txt.toLowerCase();
+    return ['how am i', 'am i on track', 'on track', 'my progress', 'how much more',
+            'status', 'how many kg', 'how many week', 'pace', 'rate', 'trend',
+            'summary', 'doing well', 'behind', 'ahead'].some(w => l.includes(w))
+        || (txt.trim().endsWith('?') && l.includes('weight') && !l.includes('log'));
+}
+function isTipQ(txt) {
+    const l = txt.toLowerCase();
+    return ['tip', 'advice', 'suggest', 'recommend', 'what should i', 'how to lose',
+            'plateau', 'stuck', 'not losing', 'help me lose'].some(w => l.includes(w));
+}
+function isGreeting(txt) {
+    return /^(hi|hello|hey|good\s*(?:morning|afternoon|evening|night))\b/i.test(txt.trim());
+}
+function isHelp(txt) {
+    const l = txt.toLowerCase();
+    return ['what can you', 'how to use', 'commands', 'what do you do', '/help', 'guide'].some(w => l.includes(w));
+}
+function isWaterQ(txt) {
+    const l = txt.toLowerCase();
+    return ['how much water', 'water intake', 'my water', 'hydration'].some(w => l.includes(w));
+}
+function isFoodQ(txt) {
+    const l = txt.toLowerCase();
+    return ['what did i eat', 'what have i eaten', "today's food", 'food today', 'my meals', 'what i ate'].some(w => l.includes(w));
+}
+function isCalQ(txt) {
+    const l = txt.toLowerCase();
+    return ['how many cal', 'calories today', 'cal today', 'calories left', 'cal left', 'calories remaining', 'how many calories'].some(w => l.includes(w));
+}
+
+function matchCombo(query) {
+    const norm = s => s.toLowerCase().replace(/[-/&]/g, ' ').replace(/\s+/g, ' ').trim();
+    const ql = norm(query);
+    for (const x of FOOD_DB) {
+        if (!x.n.includes('&')) continue;
+        const dn = norm(x.n).replace(/\s*\(.*?\)/g, '').trim();
+        const dnWords = dn.split(' ').filter(w => w.length >= 3);
+        if (dnWords.length >= 2 && dnWords.every(w => ql.includes(w))) return x;
+    }
+    return null;
+}
+
+function matchFood(query) {
+    // Normalize: lowercase, hyphens/slashes→space, collapse spaces; "soya"→"soy"
+    const norm  = s => s.toLowerCase().replace(/[-/&]/g, ' ').replace(/\bsoya\b/g, 'soy').replace(/\s+/g, ' ').trim();
+    // Also strip parenthetical suffixes: "Rendang Chicken (1 pc)" → "rendang chicken"
+    const normD = s => norm(s).replace(/\s*\(.*?\)/g, '').trim();
+
+    const ql = norm(query);
+    if (!ql || ql.length < 2) return null;
+
+    // 1. Exact (normalized)
+    let f = FOOD_DB.find(x => norm(x.n) === ql || normD(x.n) === ql);
+    // 1.5. Exact match against any "/" alternative name
+    if (!f) f = FOOD_DB.find(x => x.n.split('/').some(p => { const np = norm(p.trim()); return np === ql || np.replace(/\s*\(.*?\)/g,'').trim() === ql; }));
+    // 2. DB name contains query string
+    if (!f) f = FOOD_DB.find(x => norm(x.n).includes(ql) || normD(x.n).includes(ql));
+    // 3. Query contains DB name (min 4 chars) — prefer longest/most specific match
+    if (!f) {
+        let bestLen = 0;
+        for (const x of FOOD_DB) {
+            const dn = normD(x.n);
+            if (dn.length >= 4 && ql.includes(dn) && dn.length > bestLen) { f = x; bestLen = dn.length; }
+        }
+    }
+    // 4. All words in query (≥3 chars) found in DB name — handles "chicken rendang" → "Rendang Chicken"
+    if (!f) {
+        const qw = ql.split(' ').filter(w => w.length >= 3);
+        if (qw.length >= 2) f = FOOD_DB.find(x => { const dn = normD(x.n); return qw.every(w => dn.includes(w)); });
+    }
+    // 5. First word of query matches start of DB name
+    if (!f) {
+        const fw = ql.split(' ')[0];
+        if (fw.length >= 3) f = FOOD_DB.find(x => normD(x.n).startsWith(fw));
+    }
+    // 6. Best match by number of meaningful keywords (≥4 chars) found in DB name — picks most specific
+    const SKIP = new Set(['with','rice','milo','soup','iced','milk','cold','warm','less','more','half']);
+    if (!f) {
+        const words = ql.split(' ').filter(w => w.length >= 4 && !SKIP.has(w));
+        if (words.length > 0) {
+            let best = null, bestScore = 0;
+            for (const x of FOOD_DB) {
+                const dn = normD(x.n);
+                const score = words.filter(w => dn.includes(w)).length;
+                if (score > bestScore) { bestScore = score; best = x; }
+            }
+            if (bestScore > 0) f = best;
+        }
+    }
+    // 7. Looser fallback: any word ≥3 chars matches start of a DB name
+    if (!f) {
+        const words = ql.split(' ').filter(w => w.length >= 3 && !SKIP.has(w));
+        for (const w of words) { f = FOOD_DB.find(x => normD(x.n).startsWith(w)); if (f) break; }
+    }
+    return f || null;
+}
+
+function getBeverageML(found) {
+    const idx = FOOD_DB.indexOf(found);
+    if (idx < 0) return 0;
+    const isHot  = (idx >= 51 && idx < 60) || (idx >= 142 && idx < 146) || idx === 148 || (idx >= 151 && idx < 157) || idx === 183 || idx === 185;
+    const isCold = (idx >= 60 && idx < 77) || (idx >= 114 && idx < 124) || (idx >= 149 && idx < 151) || (idx >= 157 && idx < 160) || idx === 184 || idx === 186 || idx === 269 || idx === 284 || idx === 285;
+    if (!isHot && !isCold) return 0;
+    const n = found.n.toLowerCase();
+    if (n.includes('yakult')) return 65;
+    if (n.includes('(can)')) return 330;
+    if (n.includes('bubble tea') || n.includes('milk tea')) return 500;
+    if (n.includes('large')) return 700;
+    if (n.includes('koi')) return 500;
+    const mlMatch = n.match(/\((\d+)ml\)/);
+    if (mlMatch) return +mlMatch[1];
+    return 300;
+}
+
+// ── Progress report ──
+function progressReport() {
+    const d   = load();
+    const we  = d.entries.filter(e => e.weight != null);
+    const wse = d.entries.filter(e => e.waist  != null);
+
+    if (!we.length) return "No weight entries yet. Tell me your weight first — e.g. \"I'm 75 kg today\".";
+
+    const cur    = we[we.length - 1].weight;
+    const lost   = P.startWeight - cur;
+    const needed = P.startWeight - P.targetWeight;
+    const rem    = cur - P.targetWeight;
+    const pct    = Math.max(0, (lost / needed * 100)).toFixed(1);
+
+    const daysLeft = Math.max(0, Math.ceil((new Date(P.targetDate) - new Date()) / 86400000));
+    const wksLeft  = Math.ceil(daysLeft / 7);
+    const totalDays = Math.ceil((new Date(P.targetDate) - new Date(P.startDate)) / 86400000);
+    const daysDone  = totalDays - daysLeft;
+
+    let rateStr = '';
+    if (we.length >= 2) {
+        const first = we[0], last = we[we.length - 1];
+        const days  = Math.max(1, (new Date(last.date) - new Date(first.date)) / 86400000);
+        const rate  = ((first.weight - last.weight) / days * 7).toFixed(2);
+        if (parseFloat(rate) > 0) {
+            const eta = (rem / parseFloat(rate)).toFixed(1);
+            rateStr = `\nAverage rate: ${rate} kg/week — at this pace, ~${eta} weeks to reach 70 kg.`;
+        } else if (parseFloat(rate) < 0) {
+            rateStr = '\nWeight has gone up slightly since first entry — review your eating habits.';
+        }
+    }
+
+    let waistStr = '';
+    if (wse.length > 0) {
+        const lw = wse[wse.length - 1].waist;
+        waistStr = `\nLatest waist: ${lw} cm (${cmToIn(lw)} in).`;
+        if (wse.length >= 2) {
+            const wChg = (wse[0].waist - lw).toFixed(1);
+            if (wChg > 0) waistStr += ` Down ${wChg} cm (${cmToIn(wChg)} in) since you started — great sign!`;
+        }
+    }
+
+    const expectedLost = (needed / totalDays) * daysDone;
+    let verdict = '';
+    if (lost >= needed)               verdict = 'You have reached your goal — amazing!';
+    else if (daysDone < 7)            verdict = 'Just getting started — keep going!';
+    else if (lost >= expectedLost * 1.1) verdict = 'You are ahead of schedule — great work!';
+    else if (lost >= expectedLost * 0.8) verdict = 'You are on track. Keep the momentum!';
+    else                              verdict = 'A little behind schedule — try tightening up portions this week.';
+
+    return `Progress summary:\n\nCurrent: ${cur} kg | Lost: ${Math.max(0, lost).toFixed(1)} kg (${pct}%)\nRemaining: ${rem.toFixed(1)} kg | ${wksLeft} weeks left${waistStr}${rateStr}\n\n${verdict}`;
+}
+
+// ── Tips ──
+const TIPS = [
+    "Walk at least 8,000 steps a day — it's the easiest calorie burn with no gym needed.",
+    "Cut sugary drinks first: teh tarik, Milo, kopi with sugar. Switch to kopi-o kosong or plain water.",
+    "Eat slowly and stop at 80% full. It takes ~20 minutes for your brain to register fullness.",
+    "Add protein to every meal (eggs, tofu, chicken, fish) — it keeps hunger away longer.",
+    "Sleep 7–8 hours. Poor sleep raises hunger hormones and makes fat loss significantly harder.",
+    "At the hawker: ask for less rice, skip the gravy, add an extra veg dish instead.",
+    "If the scale hasn't moved in 2 weeks, reduce portion size by 10% — not dramatically.",
+    "Bodyweight exercises (push-ups, squats) preserve muscle while you lose fat, so you look leaner.",
+    "Weigh yourself at the same time each day (best: morning after toilet) for consistent readings.",
+    "Don't aim for perfection — aim for consistency. One bad meal won't ruin your progress.",
+];
+let tipIdx = 0;
+function nextTip() {
+    const t = TIPS[tipIdx % TIPS.length]; tipIdx++;
+    return `Tip:\n\n${t}\n\nWant another? Just ask for a tip!`;
+}
+
+// ── Main respond logic ──
+function respond(txt) {
+    if (isHelp(txt)) return { text:
+        `Here's what I understand:\n\n` +
+        `📝 Logging:\n` +
+        `• "I'm 74.5 kg" or "74.5kg today"\n` +
+        `• "Waist 85cm" or "waist 33 inches"\n` +
+        `• "Chicken rice and teh tarik for lunch"\n` +
+        `• "Breakfast: kaya toast, soft boiled egg"\n` +
+        `• "Drank 2 glasses of water" or "500ml water"\n\n` +
+        `❓ Questions:\n` +
+        `• "How am I doing?" / "Am I on track?"\n` +
+        `• "How many calories today?"\n` +
+        `• "What did I eat today?"\n` +
+        `• "How much water did I drink?"\n` +
+        `• "Give me a tip"`,
+        confirm: null };
+
+    if (isTipQ(txt))      return { text: nextTip(), confirm: null };
+    if (isProgressQ(txt)) return { text: progressReport(), confirm: null };
+
+    if (isGreeting(txt)) {
+        const we = load().entries.filter(e => e.weight != null);
+        return { text: we.length
+            ? `Hey! Last logged weight: ${we[we.length-1].weight} kg. What would you like to log?`
+            : `Hi Buddy! Tell me your weight, waist, meals, or water intake and I'll log it.`,
+            confirm: null };
+    }
+
+    // ── Query: calories today ──
+    if (isCalQ(txt)) {
+        const e   = getTodayEntry();
+        const flat= Object.values(e.mealItems||{}).flat();
+        const ate = flat.reduce((s,x)=>s+(x.cal||0),0);
+        const r   = calcReq(todayStr());
+        const rem = r.goal - ate;
+        return { text: rem >= 0
+            ? `You've had ${ate} cal today. ${rem} cal remaining out of your ${r.goal} cal goal.`
+            : `You've had ${ate} cal today — ${Math.abs(rem)} cal over your ${r.goal} cal goal.`,
+            confirm: null };
+    }
+
+    // ── Query: what did I eat ──
+    if (isFoodQ(txt)) {
+        const e = getTodayEntry();
+        const lines = SLOTS.map(s => {
+            const items = e.mealItems[s]||[];
+            if (!items.length) return null;
+            return `${SLOT_LABEL[s]}: ${items.map(x=>x.n).join(', ')}`;
+        }).filter(Boolean);
+        return { text: lines.length
+            ? `Today's meals:\n${lines.join('\n')}`
+            : `Nothing logged yet today. Tell me what you've eaten!`,
+            confirm: null };
+    }
+
+    // ── Query: water ──
+    if (isWaterQ(txt)) {
+        const e    = getTodayEntry();
+        const pure = e.water || 0;
+        const bev  = calcWaterBev(e.mealItems);
+        const ml   = pure + bev;
+        const r    = calcReq(todayStr());
+        const wFmt = v => v >= 1000 ? (v/1000).toFixed(1)+'L' : v+'ml';
+        const detail = bev > 0 ? ` (🚰 ${wFmt(pure)} drinking + 🧃 ${wFmt(bev)} beverages)` : '';
+        return { text: ml
+            ? `You've had ${wFmt(ml)} of water today${detail}. Target: ${wFmt(r.water)}.${ml>=r.water?' ✓ Goal met!':` ${wFmt(r.water-ml)} to go.`}`
+            : `No water logged yet today. Target is ${wFmt(r.water)}.`,
+            confirm: null };
+    }
+
+    // ── Parse & log data ──
+    const parsed = parseEntry(txt);
+    const hasData = parsed.weight != null || parsed.waist != null || parsed.water > 0 || parsed.meals.length > 0;
+
+    if (hasData) {
+        const logDate  = parsed.date || todayStr();
+        const dateLabel = parsed.date ? ` (${fmtDate(logDate)})` : '';
+
+        if (parsed.weight != null || parsed.waist != null)
+            upsertEntry({ date: logDate, weight: parsed.weight, waist: parsed.waist, meals: [] });
+
+        // Water
+        if (parsed.water > 0) logWater(logDate, parsed.water);
+
+        // Slot: use parser result or time-of-day
+        const detectedSlot = parsed.slot || (() => {
+            const h = new Date().getHours();
+            if (h < 10) return 'breakfast';
+            if (h < 14) return 'lunch';
+            if (h < 18) return 'tea';
+            if (h < 22) return 'dinner';
+            return 'supper';
+        })();
+
+        // Add meals (each entry is {name, qty})
+        const addedFoods = [];
+        for (const m of parsed.meals) {
+            const name  = m.name;
+            const qty   = m.qty || 1;
+            const found = matchFood(name);
+            let item;
+            if (found) {
+                const label = qty !== 1 ? `${found.n} ×${qty}` : found.n;
+                const bml = getBeverageML(found);
+                const waterAdded = bml > 0 ? Math.round(bml * qty) : 0;
+                item = {
+                    n:   label,
+                    cal: Math.round((found.cal||0) * qty),
+                    p:   Math.round((found.p||0)   * qty * 10) / 10,
+                    c:   Math.round((found.c||0)   * qty * 10) / 10,
+                    f:   Math.round((found.f||0)   * qty * 10) / 10,
+                    bml: waterAdded,
+                };
+                addedFoods.push(`${item.n} (${item.cal} cal${waterAdded > 0 ? ` +${waterAdded}ml` : ''})`);
+            } else {
+                const label = qty !== 1 ? `${qty}× ${name.charAt(0).toUpperCase()+name.slice(1)}` : name.charAt(0).toUpperCase()+name.slice(1);
+                item = { n: label, cal:0, p:0, c:0, f:0 };
+                addedFoods.push(item.n + ' (unknown cal — tap to edit)');
+            }
+            addFoodToSlot(detectedSlot, item, logDate);
+        }
+
+        // Build confirm + response text
+        const parts = [];
+        if (parsed.weight != null) parts.push(`Weight: ${parsed.weight} kg`);
+        if (parsed.waist  != null) parts.push(`Waist: ${parsed.waist} cm (${cmToIn(parsed.waist)} in)`);
+        if (parsed.water  >  0)    parts.push(`Water: +${parsed.water >= 1000 ? (parsed.water/1000).toFixed(1)+'L' : parsed.water+'ml'}`);
+        if (addedFoods.length)     parts.push(`${SLOT_LABEL[detectedSlot]}: ${addedFoods.join(', ')}`);
+        const confirm = `Logged${dateLabel} — ${parts.join(' · ')}`;
+
+        let text = '';
+        if (parsed.weight != null) {
+            const we  = load().entries.filter(e => e.weight != null);
+            const lost = +(P.startWeight - parsed.weight).toFixed(1);
+            const rem  = +(parsed.weight - P.targetWeight).toFixed(1);
+            if (we.length >= 2) {
+                const diff = +(parsed.weight - we[we.length-2].weight).toFixed(1);
+                if (diff < 0)      text += `Down ${Math.abs(diff)} kg from last time — keep it up! `;
+                else if (diff > 0) text += `Up ${diff} kg — happens, stay consistent. `;
+                else               text += `Same as last time. `;
+            }
+            text += lost > 0 ? `${lost} kg lost total, ${rem} kg to go!` : `${rem} kg to goal!`;
+        }
+        if (parsed.waist != null && !text) text = `Waist logged. Tape measure is a great fat-loss indicator.`;
+        if (parsed.water > 0) text += (text?'\n':'') + `Water logged! Staying hydrated helps with fat loss.`;
+        if (addedFoods.length) text += (text?'\n':'') + `Added to ${SLOT_LABEL[detectedSlot]}.`;
+
+        return { text: text.trim(), confirm };
+    }
+
+    return {
+        text: `I didn't catch that. Try:\n• "74.5 kg today"\n• "Waist 85cm"\n• "Chicken rice for lunch"\n• "2 glasses of water"\n• "How am I doing?"\n\nOr type /help for the full list.`,
+        confirm: null
+    };
+}
+
+// ──────────────────────────────────────────────
+// CHAT UI
+// ──────────────────────────────────────────────
+function pushMsg(role, text, confirm) {
+    const wrap = document.getElementById('messages');
+    const time = new Date().toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit' });
+    const div  = document.createElement('div');
+    div.className = `msg ${role}`;
+    const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    div.innerHTML = `<div class="bubble">${safe}</div>${confirm ? `<div class="log-confirm">${confirm}</div>` : ''}<div class="msg-time">${time}</div>`;
+    wrap.appendChild(div);
+    wrap.scrollTop = wrap.scrollHeight;
+}
+
+function send() {
+    const ta  = document.getElementById('chatInput');
+    const txt = ta.value.trim();
+    if (!txt) return;
+    ta.value = ''; ta.style.height = '44px';
+    pushMsg('user', txt, null);
+    setTimeout(() => {
+        try {
+            const r = respond(txt);
+            pushMsg('assistant', r.text, r.confirm);
+        } catch(err) {
+            pushMsg('assistant', `Sorry, something went wrong: ${err.message}`, null);
+        }
+    }, 250);
+}
+
+function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+}
+
+// ──────────────────────────────────────────────
+// INIT
+// ──────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('headerDate').textContent =
+        new Date().toLocaleDateString('en-SG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+    refreshDashboard();
+    initProfileExt();
+    initDayPicker();
+    initGeminiKeyStatus();
+
+    pushMsg('assistant',
+        `Hi Buddy! I'm your health assistant — completely free, no login needed.\n\nJust tell me:\n• "I'm 74.5 kg today"\n• "Waist is 83 cm"\n• "Had chicken rice and teh tarik for lunch"\n• "How am I doing?"\n\nWhat would you like to log today?`,
+        null
+    );
+
+    const ta = document.getElementById('chatInput');
+    ta.addEventListener('input', () => {
+        ta.style.height = '44px';
+        ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+    });
+});
+
+// ──────────────────────────────────────────────
+// GOAL EDITOR
+// ──────────────────────────────────────────────
+function toggleGoalEdit() {
+    const form = document.getElementById('goalEditForm');
+    const opening = form.style.display === 'none';
+    if (opening) {
+        document.getElementById('gStartWt').value    = P.startWeight;
+        document.getElementById('gStartDate').value  = P.startDate;
+        document.getElementById('gTargetWt').value   = P.targetWeight;
+        document.getElementById('gTargetDate').value = P.targetDate;
+    }
+    form.style.display = opening ? 'block' : 'none';
+}
+
+function saveGoal() {
+    const sw = parseFloat(document.getElementById('gStartWt').value);
+    const sd = document.getElementById('gStartDate').value;
+    const tw = parseFloat(document.getElementById('gTargetWt').value);
+    const td = document.getElementById('gTargetDate').value;
+    if (!sw || !sd || !tw || !td) { alert('Please fill in all four fields.'); return; }
+    if (tw >= sw) { alert('Target weight should be less than start weight for a weight-loss goal.'); return; }
+    if (td <= sd) { alert('Target date should be after start date.'); return; }
+
+    // Safety check — BMI guardrails
+    const ext = loadProfileExt();
+    const hm  = (ext.height || P.height) / 100;
+    if (hm > 0) {
+        const curBMI = +(sw / (hm * hm)).toFixed(1);
+        const tgtBMI = +(tw / (hm * hm)).toFixed(1);
+        if (curBMI < 16) {
+            alert(`⚠️ Cannot set a weight-loss goal.\n\nYour current weight gives a severely underweight BMI of ${curBMI}. Further weight loss is dangerous and may cause organ damage. Please speak with a doctor.`);
+            return;
+        }
+        if (curBMI < 18.5) {
+            alert(`⚠️ Cannot set a weight-loss goal.\n\nYou are already underweight (BMI ${curBMI}). The healthy range is 18.5–24.9. Losing more weight risks bone density loss, hormonal issues, and fatigue. Please consult a healthcare professional.`);
+            return;
+        }
+        if (tgtBMI < 16) {
+            alert(`⚠️ Unsafe target weight.\n\nThis target would result in a severely underweight BMI of ${tgtBMI}. Please raise your target weight to at least ${Math.ceil(16 * hm * hm * 10) / 10} kg (BMI 16) or ideally ${Math.ceil(18.5 * hm * hm * 10) / 10} kg (BMI 18.5).`);
+            return;
+        }
+        if (tgtBMI < 18.5) {
+            const minHealthy = Math.ceil(18.5 * hm * hm * 10) / 10;
+            const ok = confirm(`⚠️ Underweight target.\n\nThis target weight results in a BMI of ${tgtBMI}, which is below the healthy range (18.5–24.9). Going this low risks bone loss, fatigue, and hormonal disruption.\n\nRecommended minimum: ${minHealthy} kg (BMI 18.5).\n\nProceed anyway?`);
+            if (!ok) return;
+        }
+    }
+
+    // Safety check — calculate required weekly loss rate
+    const weeksToGoal  = Math.max(1, (new Date(td) - new Date()) / (7 * 86400000));
+    const tolose       = sw - tw;
+    const weeklyRate   = tolose / weeksToGoal;
+
+    if (weeklyRate > 1) {
+        // Compute minimum safe date at 0.75 kg/week
+        const safeDays = Math.ceil((tolose / 0.75) * 7);
+        const safeDate = new Date(); safeDate.setDate(safeDate.getDate() + safeDays);
+        const safeDateFmt = safeDate.toLocaleDateString('en-SG', { day:'numeric', month:'long', year:'numeric' });
+        alert(`⚠️ This goal is unsafe.\n\nLosing ${tolose.toFixed(1)} kg by your target date requires ${weeklyRate.toFixed(2)} kg/week — well above the safe limit of 1 kg/week. Extreme deficits risk muscle loss, nutrient deficiency, and gallstones.\n\nTo lose ${tolose.toFixed(1)} kg safely, set your target date to at least ${safeDateFmt}.`);
+        return;
+    }
+
+    if (weeklyRate > 0.75) {
+        const ok = confirm(`⚠️ This goal is aggressive.\n\nIt requires losing ${weeklyRate.toFixed(2)} kg/week. The recommended safe rate is ≤ 0.75 kg/week. Your calorie deficit will be capped at 750 cal/day.\n\nThis is achievable but may be difficult to sustain. Proceed?`);
+        if (!ok) return;
+    }
+
+    const g = { startWeight: sw, startDate: sd, targetWeight: tw, targetDate: td };
+    localStorage.setItem('bt_goal', JSON.stringify(g));
+    Object.assign(P, g);
+    document.getElementById('goalEditForm').style.display = 'none';
+    refreshDashboard();
+}
+
+// ──────────────────────────────────────────────
+// INSIGHTS
+// ──────────────────────────────────────────────
+function getAteForDate(dateStr) {
+    const d    = load();
+    const e    = d.entries.find(x => x.date === dateStr) || { mealItems: {} };
+    const flat = Object.values(e.mealItems || {}).flat();
+    return {
+        cal:   flat.reduce((s,x) => s+(x.cal||0), 0),
+        p:     flat.reduce((s,x) => s+(x.p  ||0), 0),
+        c:     flat.reduce((s,x) => s+(x.c  ||0), 0),
+        f:     flat.reduce((s,x) => s+(x.f  ||0), 0),
+        fi:    Math.round(flat.reduce((s,x) => s+getItemFi(x), 0)*10)/10,
+        na:    Math.round(flat.reduce((s,x) => s+getItemNa(x), 0)),
+        su:    Math.round(flat.reduce((s,x) => s+getItemSu(x), 0)),
+        items: flat.length,
+    };
+}
+
+function renderInsights() {
+    renderDailyInsights();
+    renderWeeklyInsights();
+    renderMonthlyInsights();
+    renderYearlyInsights();
+    renderExportReminder();
+}
+
+function renderDailyInsights() {
+    const today = todayStr();
+    const ate   = getAteForDate(today);
+    const r     = calcReq(today);
+    const lbl   = document.getElementById('insightDayLabel');
+    if (lbl) lbl.textContent = '— ' + new Date().toLocaleDateString('en-SG', { weekday:'long', day:'numeric', month:'short' });
+
+    if (ate.items === 0) {
+        document.getElementById('insightDailyBody').innerHTML =
+            '<div class="no-data-msg">No meals logged today yet.<br>Add food in the Daily Record tab to see feedback here.</div>';
+        return;
+    }
+
+    const dot  = cls => `<div class="im-dot ${cls}"></div>`;
+    const row  = (dotCls, name, vals, advice) => `
+        <div class="im-row">
+            ${dot(dotCls)}
+            <div class="im-main">
+                <div class="im-name">${name}</div>
+                <div class="im-vals">${vals}</div>
+                <div class="im-advice">${advice}</div>
+            </div>
+        </div>`;
+    const hdr  = t => `<div class="im-section-hdr">${t}</div>`;
+
+    // Calories
+    const calPct = r.goal > 0 ? ate.cal / r.goal * 100 : 0;
+    const calDot = calPct <= 80 ? 'dot-g' : calPct <= 100 ? 'dot-a' : 'dot-r';
+    const calAdv = calPct <= 80 ? 'Good — you have room left in your budget. Make sure you still hit protein.'
+                 : calPct <= 100 ? 'Close to your limit — choose light options for remaining meals.'
+                 : `Over by ${ate.cal - r.goal} cal. Consider a lighter dinner or skip dessert tomorrow.`;
+
+    // Protein
+    const pPct = r.protein > 0 ? ate.p / r.protein * 100 : 0;
+    const pDot = pPct >= 100 ? 'dot-g' : pPct >= 70 ? 'dot-a' : 'dot-r';
+    const pAdv = pPct >= 100 ? 'Protein target met — great for muscle preservation.'
+               : pPct >= 70  ? `${r.protein - ate.p}g more to go. Add eggs, tofu, or a protein drink.`
+               :                `Only ${ate.p}g of ${r.protein}g. Prioritise protein-rich foods in your next meal.`;
+
+    // Carbs
+    const cPct = r.carbs > 0 ? ate.c / r.carbs * 100 : 0;
+    const cDot = cPct <= 90 ? 'dot-g' : cPct <= 110 ? 'dot-a' : 'dot-r';
+    const cAdv = cPct <= 90 ? 'Carbs within budget.'
+               : cPct <= 110 ? 'Slightly over on carbs — keep dinner light on rice/noodles.'
+               :                'High carb day. Balance it with extra activity or fewer carbs tomorrow.';
+
+    // Fat
+    const fPct = r.fat > 0 ? ate.f / r.fat * 100 : 0;
+    const fDot = fPct <= 90 ? 'dot-g' : fPct <= 110 ? 'dot-a' : 'dot-r';
+    const fAdv = fPct <= 90 ? 'Fat intake looks good.'
+               : fPct <= 110 ? 'Slightly high on fat. Watch out for fried foods.'
+               :                'High fat intake today. Opt for steamed or grilled options next meal.';
+
+    // Fibre
+    const fiDot = ate.fi >= 25 ? 'dot-g' : ate.fi >= 15 ? 'dot-a' : 'dot-r';
+    const fiAdv = ate.fi >= 25 ? 'Great fibre intake! Good for digestion and staying full.'
+                : ate.fi >= 15 ? `${(25 - ate.fi).toFixed(1)}g short of 25g target. Add veggies, fruits, or oats.`
+                :                'Low fibre today. Include more vegetables, beans, or whole grains.';
+
+    // Sugar
+    const suDot = ate.su <= 20 ? 'dot-g' : ate.su <= 25 ? 'dot-a' : 'dot-r';
+    const suAdv = ate.su <= 20 ? 'Sugar intake is well controlled.'
+                : ate.su <= 25 ? 'Close to the 25g sugar limit. Skip sweetened drinks for the rest of the day.'
+                :                `${ate.su - 25}g over the recommended max. Watch out for hidden sugars in sauces and drinks.`;
+
+    // Sodium
+    const naDot = ate.na <= 1500 ? 'dot-g' : ate.na <= 2000 ? 'dot-a' : 'dot-r';
+    const naAdv = ate.na <= 1500 ? 'Sodium intake is excellent.'
+                : ate.na <= 2000 ? 'Approaching the 2,000mg limit. Avoid adding soy sauce or salty condiments.'
+                :                  `Over the 2,000mg limit by ${ate.na - 2000}mg. Drink more water and choose low-sodium options tomorrow.`;
+
+    document.getElementById('insightDailyBody').innerHTML =
+        hdr('🔥 Energy') +
+        row(calDot, 'Calories', `${ate.cal} / ${r.goal} cal (${calPct.toFixed(0)}% of goal)`, calAdv) +
+        hdr('💪 Macronutrients') +
+        row(pDot,  'Protein',       `${ate.p}g / ${r.protein}g target`, pAdv) +
+        row(cDot,  'Carbohydrates', `${ate.c}g / ${r.carbs}g target`,   cAdv) +
+        row(fDot,  'Fat',           `${ate.f}g / ${r.fat}g target`,     fAdv) +
+        hdr('⚖️ Limits & Targets') +
+        row(fiDot, 'Fibre',  `${ate.fi}g / 25–30g target`, fiAdv) +
+        row(suDot, 'Sugar',  `${ate.su}g / <25g limit`,    suAdv) +
+        row(naDot, 'Sodium', `${ate.na}mg / <2,000mg limit`, naAdv);
+}
+
+function renderWeeklyInsights() {
+    const d     = load();
+    const today = todayStr();
+    const days  = [];
+    for (let i = 6; i >= 0; i--) {
+        const dt = new Date(); dt.setDate(dt.getDate() - i);
+        const ds = dt.toISOString().slice(0,10);
+        const ate = getAteForDate(ds);
+        const r   = calcReq(ds);
+        days.push({ ds, ate, r, label: dt.toLocaleDateString('en-SG', { weekday:'short' }) });
+    }
+
+    const logged = days.filter(d => d.ate.items > 0);
+    const consistency = logged.length;
+
+    if (consistency === 0) {
+        document.getElementById('insightWeeklyBody').innerHTML =
+            '<div class="no-data-msg">No meals logged in the past 7 days.</div>';
+        return;
+    }
+
+    const avg = field => Math.round(logged.reduce((s,d) => s + d.ate[field], 0) / logged.length);
+    const avgCal  = avg('cal');
+    const avgP    = avg('p');
+    const avgFi   = (logged.reduce((s,d) => s + d.ate.fi, 0) / logged.length).toFixed(1);
+    const avgSu   = avg('su');
+    const avgNa   = avg('na');
+    const goalAvg = Math.round(logged.reduce((s,d) => s + d.r.goal, 0) / logged.length);
+    const onTrackDays = logged.filter(d => d.ate.cal <= d.r.goal).length;
+
+    // Weight change over the week
+    const we = d.entries.filter(e => e.weight != null);
+    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgoStr = weekAgo.toISOString().slice(0,10);
+    const wStart = we.filter(e => e.date >= weekAgoStr).slice(0,1)[0]?.weight;
+    const wEnd   = we.filter(e => e.date <= today).slice(-1)[0]?.weight;
+    const wChg   = (wStart && wEnd && wStart !== wEnd) ? (wEnd - wStart).toFixed(1) : null;
+
+    // Bar chart data
+    const maxCal = Math.max(...days.map(d => d.ate.cal), 1);
+    const bars = days.map(d => {
+        const pct  = Math.min(100, d.ate.cal / maxCal * 100);
+        const goal = d.r.goal;
+        const cls  = d.ate.items === 0 ? 'wbar-n'
+                   : d.ate.cal <= goal ? 'wbar-g'
+                   : d.ate.cal <= goal * 1.1 ? 'wbar-a'
+                   : 'wbar-r';
+        return `<div class="week-day">
+            <div class="week-day-label">${d.label}</div>
+            <div class="week-bar-wrap">
+                <div class="week-bar ${cls}" style="height:${Math.max(2,pct * 0.6)}px"></div>
+            </div>
+            <div class="week-cal-val">${d.ate.items > 0 ? d.ate.cal : '—'}</div>
+        </div>`;
+    }).join('');
+
+    // Weekly advice
+    const calDeficit = avgCal < goalAvg;
+    const advice = [];
+    if (consistency < 5) advice.push(`You only logged ${consistency} of 7 days — try to log every day for more accurate tracking.`);
+    if (onTrackDays >= 5) advice.push('Great consistency — you stayed within your calorie goal on most days.');
+    else if (onTrackDays >= 3) advice.push('You were on track about half the week. Identify which meals pushed you over on the tough days.');
+    else advice.push('Most days exceeded the calorie goal. Consider prepping meals in advance to stay on track.');
+    if (+avgFi < 20) advice.push('Weekly fibre average is low. Aim for more vegetables and fruits each day.');
+    if (avgSu > 25)  advice.push('Average sugar is above the 25g daily limit — check drinks and sauces.');
+    if (avgNa > 1800) advice.push('Average sodium is high. Choose lower-sodium options like home-cooked meals.');
+    if (wChg !== null) {
+        const n = parseFloat(wChg);
+        if (n < -0.5) advice.push(`Weight dropped ${Math.abs(n)} kg this week — great progress!`);
+        else if (n > 0.5) advice.push(`Weight increased ${n} kg this week. Review your calorie intake.`);
+        else advice.push('Weight is relatively stable this week.');
+    }
+
+    const wChgHtml = wChg !== null
+        ? `${parseFloat(wChg) > 0 ? '+' : ''}${wChg} kg`
+        : '—';
+    const wChgColor = wChg === null ? '#aaa' : parseFloat(wChg) <= 0 ? '#2e7d32' : '#c62828';
+
+    document.getElementById('insightWeeklyBody').innerHTML = `
+        <div class="week-grid">${bars}</div>
+        <div class="week-stat-grid">
+            <div class="week-stat">
+                <div class="week-stat-val">${consistency}/7</div>
+                <div class="week-stat-label">Days logged</div>
+            </div>
+            <div class="week-stat">
+                <div class="week-stat-val">${onTrackDays}</div>
+                <div class="week-stat-label">Days on target</div>
+            </div>
+            <div class="week-stat">
+                <div class="week-stat-val" style="color:${wChgColor}">${wChgHtml}</div>
+                <div class="week-stat-label">Weight change</div>
+            </div>
+        </div>
+        <div class="week-stat-grid">
+            <div class="week-stat">
+                <div class="week-stat-val">${avgCal}</div>
+                <div class="week-stat-label">Avg cal/day</div>
+            </div>
+            <div class="week-stat">
+                <div class="week-stat-val">${avgP}g</div>
+                <div class="week-stat-label">Avg protein</div>
+            </div>
+            <div class="week-stat">
+                <div class="week-stat-val">${avgFi}g</div>
+                <div class="week-stat-label">Avg fibre</div>
+            </div>
+        </div>
+        <div class="week-advice-box">${advice.map(a => `• ${a}`).join('<br>')}</div>`;
+}
+
+// ──────────────────────────────────────────────
+// EXPORT & BACKUP
+// ──────────────────────────────────────────────
+// ──────────────────────────────────────────────
+// MONTHLY INSIGHTS
+// ──────────────────────────────────────────────
+function renderMonthlyInsights() {
+    const now   = new Date();
+    const year  = now.getFullYear();
+    const month = now.getMonth();
+    const monthName = now.toLocaleDateString('en-SG', { month:'long', year:'numeric' });
+    const lbl = document.getElementById('insightMonthLabel');
+    if (lbl) lbl.textContent = '— ' + monthName;
+
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const todayD = now.getDate();
+    const d = load();
+    const r = calcReq();
+
+    // Collect all days of this month up to today
+    const monthDays = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+        const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const ate = getAteForDate(ds);
+        const isFuture = day > todayD;
+        monthDays.push({ day, ds, ate, isFuture });
+    }
+
+    const logged = monthDays.filter(x => !x.isFuture && x.ate.items > 0);
+    if (logged.length === 0) {
+        document.getElementById('insightMonthlyBody').innerHTML =
+            '<div class="no-data-msg">No meals logged this month yet.</div>';
+        return;
+    }
+
+    const avg = field => Math.round(logged.reduce((s,x) => s + x.ate[field], 0) / logged.length);
+    const avgCal  = avg('cal');
+    const avgP    = avg('p');
+    const avgFi   = (logged.reduce((s,x) => s + x.ate.fi, 0) / logged.length).toFixed(1);
+    const avgSu   = avg('su');
+    const avgNa   = avg('na');
+    const onTarget = logged.filter(x => x.ate.cal <= r.goal).length;
+    const consistency = Math.round(logged.length / todayD * 100);
+
+    // Weight change this month
+    const we = d.entries.filter(e => e.weight != null);
+    const monthStr = `${year}-${String(month+1).padStart(2,'0')}`;
+    const wMonth = we.filter(e => e.date.startsWith(monthStr));
+    const wStart = wMonth[0]?.weight;
+    const wEnd   = wMonth[wMonth.length - 1]?.weight;
+    const wChg   = (wStart && wEnd && wMonth.length > 1) ? (wEnd - wStart).toFixed(1) : null;
+
+    // Heatmap
+    const heatmap = monthDays.map(({ day, ate, isFuture }) => {
+        let cls, title;
+        if (isFuture)          { cls = 'mh-f'; title = 'Future'; }
+        else if (ate.items===0){ cls = 'mh-n'; title = 'Not logged'; }
+        else if (ate.cal <= r.goal)         { cls = 'mh-g'; title = `${ate.cal} cal — on target`; }
+        else if (ate.cal <= r.goal * 1.1)   { cls = 'mh-a'; title = `${ate.cal} cal — slightly over`; }
+        else                                { cls = 'mh-r'; title = `${ate.cal} cal — over target`; }
+        return `<div class="mh-day ${cls}" title="${title}">${day}</div>`;
+    }).join('');
+
+    // Advice
+    const advice = [];
+    if (consistency >= 80) advice.push(`Strong logging habit — ${logged.length} of ${todayD} days tracked (${consistency}%).`);
+    else advice.push(`You logged ${logged.length} of ${todayD} days this month. Try to log every day for better accuracy.`);
+    if (onTarget >= logged.length * 0.7) advice.push('Most days were within your calorie goal — great discipline!');
+    else advice.push(`Only ${onTarget} of ${logged.length} logged days were on target. Review which meals push you over.`);
+    if (+avgFi < 20) advice.push('Monthly average fibre is below 20g. Add more vegetables, fruits, and legumes.');
+    if (avgSu > 25) advice.push('Average sugar exceeds the 25g daily limit. Watch out for sauces and sweetened drinks.');
+    if (wChg !== null) {
+        const n = parseFloat(wChg);
+        if (n < 0) advice.push(`Weight dropped ${Math.abs(n)} kg this month — keep it up!`);
+        else if (n > 0) advice.push(`Weight increased ${n} kg this month. Tighten up portion control.`);
+        else advice.push('Weight held steady this month.');
+    }
+
+    const wChgColor = wChg === null ? '#aaa' : parseFloat(wChg) <= 0 ? '#2e7d32' : '#c62828';
+    const wChgHtml  = wChg !== null ? `${parseFloat(wChg) > 0 ? '+' : ''}${wChg} kg` : '—';
+
+    document.getElementById('insightMonthlyBody').innerHTML = `
+        <div class="month-heatmap">${heatmap}</div>
+        <div style="display:flex;gap:10px;font-size:10px;color:#aaa;margin-bottom:14px;flex-wrap:wrap">
+            <span><span style="display:inline-block;width:10px;height:10px;background:#a5d6a7;border-radius:2px;margin-right:3px"></span>On target</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:#ffe082;border-radius:2px;margin-right:3px"></span>Slightly over</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:#ef9a9a;border-radius:2px;margin-right:3px"></span>Over target</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:#f0f0f0;border-radius:2px;margin-right:3px"></span>Not logged</span>
+        </div>
+        <div class="week-stat-grid">
+            <div class="week-stat"><div class="week-stat-val">${logged.length}/${todayD}</div><div class="week-stat-label">Days logged</div></div>
+            <div class="week-stat"><div class="week-stat-val">${onTarget}</div><div class="week-stat-label">Days on target</div></div>
+            <div class="week-stat"><div class="week-stat-val" style="color:${wChgColor}">${wChgHtml}</div><div class="week-stat-label">Weight change</div></div>
+        </div>
+        <div class="week-stat-grid">
+            <div class="week-stat"><div class="week-stat-val">${avgCal}</div><div class="week-stat-label">Avg cal/day</div></div>
+            <div class="week-stat"><div class="week-stat-val">${avgP}g</div><div class="week-stat-label">Avg protein</div></div>
+            <div class="week-stat"><div class="week-stat-val">${avgFi}g</div><div class="week-stat-label">Avg fibre</div></div>
+        </div>
+        <div class="week-advice-box">${advice.map(a => `• ${a}`).join('<br>')}</div>`;
+}
+
+// ──────────────────────────────────────────────
+// YEARLY INSIGHTS
+// ──────────────────────────────────────────────
+function renderYearlyInsights() {
+    const now  = new Date();
+    const year = now.getFullYear();
+    const lbl  = document.getElementById('insightYearLabel');
+    if (lbl) lbl.textContent = `— ${year}`;
+
+    const d  = load();
+    const r  = calcReq();
+
+    // Build per-month stats for the last 12 months
+    const months = [];
+    for (let i = 11; i >= 0; i--) {
+        const dt    = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const y     = dt.getFullYear();
+        const m     = dt.getMonth();
+        const key   = `${y}-${String(m+1).padStart(2,'0')}`;
+        const label = dt.toLocaleDateString('en-SG', { month:'short' });
+        const daysInMo = new Date(y, m+1, 0).getDate();
+        const daysUpTo = (y === now.getFullYear() && m === now.getMonth()) ? now.getDate() : daysInMo;
+        let totalCal = 0, loggedDays = 0, onTarget = 0;
+        for (let day = 1; day <= daysUpTo; day++) {
+            const ds  = `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+            const ate = getAteForDate(ds);
+            if (ate.items > 0) {
+                totalCal += ate.cal; loggedDays++;
+                if (ate.cal <= r.goal) onTarget++;
+            }
+        }
+        const avgCal = loggedDays > 0 ? Math.round(totalCal / loggedDays) : 0;
+        months.push({ label, key, avgCal, loggedDays, onTarget, daysUpTo });
+    }
+
+    const activeMonths = months.filter(m => m.loggedDays > 0);
+    if (activeMonths.length === 0) {
+        document.getElementById('insightYearlyBody').innerHTML =
+            '<div class="no-data-msg">No data found for this year yet.</div>';
+        return;
+    }
+
+    const totalLogged   = months.reduce((s,m) => s + m.loggedDays, 0);
+    const totalDaysSoFar = Math.ceil((now - new Date(year, 0, 1)) / 86400000) + 1;
+    const yearConsist   = Math.round(totalLogged / totalDaysSoFar * 100);
+    const overallAvgCal = Math.round(activeMonths.reduce((s,m) => s + m.avgCal, 0) / activeMonths.length);
+    const bestMonth     = [...activeMonths].sort((a,b) => b.onTarget - a.onTarget)[0];
+
+    // Weight change year-to-date
+    const we     = d.entries.filter(e => e.weight != null);
+    const wYear  = we.filter(e => e.date.startsWith(String(year)));
+    const wStart = wYear[0]?.weight;
+    const wEnd   = wYear[wYear.length-1]?.weight;
+    const wChg   = (wStart && wEnd && wYear.length > 1) ? (wEnd - wStart).toFixed(1) : null;
+
+    // Bar chart
+    const maxCal = Math.max(...months.map(m => m.avgCal), 1);
+    const bars = months.map(m => {
+        const pct = Math.min(100, m.avgCal / maxCal * 100);
+        const cls = m.loggedDays === 0 ? 'yrb-n'
+                  : m.avgCal <= r.goal ? 'yrb-g'
+                  : m.avgCal <= r.goal * 1.1 ? 'yrb-a'
+                  : 'yrb-r';
+        return `<div class="yr-cell">
+            <div class="yr-label">${m.label}</div>
+            <div class="yr-bar-wrap"><div class="yr-bar ${cls}" style="height:${Math.max(2, pct*0.5)}px"></div></div>
+            <div class="yr-val">${m.avgCal || '—'}</div>
+            <div class="yr-logged">${m.loggedDays}d</div>
+        </div>`;
+    }).join('');
+
+    // Yearly advice
+    const advice = [];
+    if (yearConsist >= 70) advice.push(`Excellent consistency — ${totalLogged} of ${totalDaysSoFar} days logged this year (${yearConsist}%).`);
+    else advice.push(`You've logged ${totalLogged} of ${totalDaysSoFar} days this year (${yearConsist}%). Building a daily logging habit makes tracking far more effective.`);
+    if (bestMonth) advice.push(`Best month: ${bestMonth.label} — ${bestMonth.onTarget} of ${bestMonth.loggedDays} days on target.`);
+    if (overallAvgCal <= r.goal) advice.push('Yearly average calories are within your goal — solid work overall.');
+    else advice.push(`Yearly average (${overallAvgCal} cal) is above your goal (${r.goal} cal). Focus on consistency in the coming months.`);
+    if (wChg !== null) {
+        const n = parseFloat(wChg);
+        if (n < 0) advice.push(`Weight dropped ${Math.abs(n)} kg since the start of the year — great progress!`);
+        else if (n > 0) advice.push(`Weight increased ${n} kg since the start of the year. Review your longer-term patterns.`);
+    }
+
+    const wChgColor = wChg === null ? '#aaa' : parseFloat(wChg) <= 0 ? '#2e7d32' : '#c62828';
+    const wChgHtml  = wChg !== null ? `${parseFloat(wChg) > 0 ? '+' : ''}${wChg} kg` : '—';
+
+    document.getElementById('insightYearlyBody').innerHTML = `
+        <div class="year-grid">${bars}</div>
+        <div class="week-stat-grid">
+            <div class="week-stat"><div class="week-stat-val">${totalLogged}</div><div class="week-stat-label">Days logged</div></div>
+            <div class="week-stat"><div class="week-stat-val">${yearConsist}%</div><div class="week-stat-label">Consistency</div></div>
+            <div class="week-stat"><div class="week-stat-val" style="color:${wChgColor}">${wChgHtml}</div><div class="week-stat-label">Weight change</div></div>
+        </div>
+        <div class="week-stat-grid">
+            <div class="week-stat"><div class="week-stat-val">${overallAvgCal}</div><div class="week-stat-label">Avg cal/day</div></div>
+            <div class="week-stat"><div class="week-stat-val">${activeMonths.length}</div><div class="week-stat-label">Active months</div></div>
+            <div class="week-stat"><div class="week-stat-val">${bestMonth ? bestMonth.label : '—'}</div><div class="week-stat-label">Best month</div></div>
+        </div>
+        <div class="week-advice-box">${advice.map(a => `• ${a}`).join('<br>')}</div>`;
+}
+
+// ──────────────────────────────────────────────
+// EXPORT REMINDER
+// ──────────────────────────────────────────────
+function renderExportReminder() {
+    const last = localStorage.getItem('bt_lastExport');
+    const badge = document.getElementById('exportReminderBadge');
+    const note  = document.getElementById('exportLastDate');
+    if (!last) {
+        if (badge) badge.innerHTML = '<span class="export-reminder">Never exported</span>';
+        if (note)  note.textContent = 'You have never exported your data. We recommend exporting weekly.';
+        return;
+    }
+    const daysSince = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
+    const fmtLast   = new Date(last).toLocaleDateString('en-SG', { day:'numeric', month:'short', year:'numeric' });
+    if (note) note.textContent = `Last exported: ${fmtLast} (${daysSince} day${daysSince !== 1 ? 's' : ''} ago)`;
+    if (badge) {
+        badge.innerHTML = daysSince >= 7
+            ? `<span class="export-reminder">⚠ Export due</span>`
+            : '';
+    }
+}
+
+function markExported() {
+    localStorage.setItem('bt_lastExport', new Date().toISOString());
+    renderExportReminder();
+}
+
+function exportJSON() {
+    const data = localStorage.getItem('bt_data') || '{"entries":[]}';
+    const blob = new Blob([data], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `bodytrack-backup-${todayStr()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    markExported();
+}
+
+function exportCSV() {
+    const d = load();
+    const rows = [['Date','Weight(kg)','Waist(cm)','Calories','Protein(g)','Carbs(g)','Fat(g)','Fibre(g)','Sugar(g)','Sodium(mg)']];
+    for (const e of d.entries) {
+        const flat = Object.values(e.mealItems || {}).flat();
+        const cal  = flat.reduce((s,x) => s+(x.cal||0), 0);
+        const p    = flat.reduce((s,x) => s+(x.p  ||0), 0);
+        const c    = flat.reduce((s,x) => s+(x.c  ||0), 0);
+        const f    = flat.reduce((s,x) => s+(x.f  ||0), 0);
+        const fi   = Math.round(flat.reduce((s,x) => s+getItemFi(x), 0)*10)/10;
+        const su   = Math.round(flat.reduce((s,x) => s+getItemSu(x), 0));
+        const na   = Math.round(flat.reduce((s,x) => s+getItemNa(x), 0));
+        rows.push([e.date, e.weight ?? '', e.waist ?? '', cal, p, c, f, fi, su, na]);
+    }
+    const csv  = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `bodytrack-${todayStr()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    markExported();
+}
+
+function importJSON(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        try {
+            const parsed = JSON.parse(e.target.result);
+            if (!parsed.entries || !Array.isArray(parsed.entries)) throw new Error('Invalid format');
+            save(parsed);
+            document.getElementById('importStatus').textContent = `✓ Imported ${parsed.entries.length} records successfully.`;
+            document.getElementById('importStatus').style.color = '#2e7d32';
+            refreshDashboard();
+            renderInsights();
+        } catch {
+            document.getElementById('importStatus').textContent = '✗ Import failed — file does not appear to be a valid BodyTrack backup.';
+            document.getElementById('importStatus').style.color = '#c62828';
+        }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+}
+
+// ──────────────────────────────────────────────
+// GEMINI PHOTO FOOD ANALYSIS
+// ──────────────────────────────────────────────
+function getGeminiKey() { return localStorage.getItem('gemini_api_key') || ''; }
+
+function saveGeminiKey() {
+    const val = document.getElementById('geminiKeyInput').value.trim();
+    if (!val) return;
+    localStorage.setItem('gemini_api_key', val);
+    document.getElementById('geminiKeyInput').value = '';
+    document.getElementById('geminiKeyStatus').textContent = '✅ API key saved.';
+}
+
+function initGeminiKeyStatus() {
+    const status = document.getElementById('geminiKeyStatus');
+    if (status) status.textContent = getGeminiKey() ? '✅ API key is set.' : 'No API key saved yet.';
+}
+
+function handlePhotoUpload(event) {
+    const file = event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const key = getGeminiKey();
+    if (!key) {
+        pushMsg('assistant', '📷 To use food photo analysis, please go to the Insights tab and save your Gemini API key first.', null);
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const dataUrl = e.target.result;
+        const base64  = dataUrl.split(',')[1];
+        const mime    = file.type || 'image/jpeg';
+
+        // Show image preview as user message
+        const wrap = document.getElementById('messages');
+        const time = new Date().toLocaleTimeString('en-SG', { hour:'2-digit', minute:'2-digit' });
+        const imgDiv = document.createElement('div');
+        imgDiv.className = 'msg user';
+        imgDiv.innerHTML = `<div class="bubble"><img src="${dataUrl}" class="chat-img"><span style="font-size:12px;opacity:0.8">Analysing food photo…</span></div><div class="msg-time">${time}</div>`;
+        wrap.appendChild(imgDiv);
+        wrap.scrollTop = wrap.scrollHeight;
+
+        try {
+            const foods = await analyzePhotoWithGemini(base64, mime, key);
+            if (!foods || foods.length === 0) {
+                pushMsg('assistant', "I couldn't identify any food in that photo. Try a clearer shot or log it by text.", null);
+                return;
+            }
+
+            // Show slot selector in chat
+            showPhotoSlotPicker(foods);
+        } catch (err) {
+            pushMsg('assistant', `Sorry, photo analysis failed: ${err.message}`, null);
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+function getCurrentSlot() {
+    const h = new Date().getHours();
+    if (h < 10) return 'breakfast';
+    if (h < 13) return 'lunch';
+    if (h < 16) return 'tea';
+    if (h < 21) return 'dinner';
+    return 'supper';
+}
+
+function showPhotoSlotPicker(foods) {
+    const lines = foods.map(f => `• ${f.name} — ${f.cal} kcal`).join('\n');
+    const suggested = getCurrentSlot();
+    const slots = ['breakfast','lunch','tea','dinner','supper'];
+    const opts = slots.map(s =>
+        `<option value="${s}" ${s === suggested ? 'selected' : ''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`
+    ).join('');
+
+    const ts = Date.now();
+    const slotId = 'photo-slot-' + ts;
+    const dateId = 'photo-date-' + ts;
+    const wrap = document.getElementById('messages');
+    const time = new Date().toLocaleTimeString('en-SG', { hour:'2-digit', minute:'2-digit' });
+    const div = document.createElement('div');
+    div.className = 'msg assistant';
+    div.innerHTML = `
+        <div class="bubble">
+            📷 I found these in your photo:<br><br>
+            ${lines.replace(/\n/g,'<br>')}
+            <br><br>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 10px;align-items:center;margin-top:4px;font-size:12px">
+                <label style="font-weight:700">Date:</label>
+                <input type="date" id="${dateId}" value="${todayStr()}" max="${todayStr()}"
+                    style="border:2px solid #ede8f8;border-radius:8px;padding:5px 8px;font-size:12px;font-family:inherit;outline:none">
+                <label style="font-weight:700">Meal slot:</label>
+                <select id="${slotId}" style="border:2px solid #ede8f8;border-radius:8px;padding:5px 8px;font-size:12px;font-family:inherit;outline:none">${opts}</select>
+            </div>
+            <button onclick="confirmPhotoLog(${JSON.stringify(foods).replace(/"/g,'&quot;')}, '${slotId}', '${dateId}')"
+                style="margin-top:10px;width:100%;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">
+                ✅ Log it
+            </button>
+        </div>
+        <div class="msg-time">${time}</div>`;
+    wrap.appendChild(div);
+    wrap.scrollTop = wrap.scrollHeight;
+}
+
+function confirmPhotoLog(foods, slotId, dateId) {
+    const slot = document.getElementById(slotId).value;
+    const date = document.getElementById(dateId).value || todayStr();
+    foods.forEach(f => {
+        addFoodToSlot(slot, { n: f.name, cal: f.cal, p: f.p||0, c: f.c||0, f: f.f||0, su: f.su||0, na: f.na||0, fi: f.fi||0 }, date);
+    });
+    refreshDashboard();
+
+    const msg = document.getElementById(slotId).closest('.msg');
+    if (msg) msg.remove();
+
+    const confirm = `✅ Logged to ${slot} on ${date}: ${foods.map(f=>f.name).join(', ')}`;
+    pushMsg('assistant', `Done! Logged ${foods.length} item${foods.length>1?'s':''} to ${slot} on ${date}.`, confirm);
+}
+
+async function analyzePhotoWithGemini(base64, mime, key) {
+    const prompt = `You are a nutrition expert specialising in Singapore and Asian food.
+Analyse this food photo and identify all distinct food items visible.
+For each item return a JSON array (no markdown, raw JSON only) like:
+[{"name":"Chicken Rice","cal":550,"p":32,"c":65,"f":12,"su":2,"na":680,"fi":1}]
+Fields: name (string), cal (kcal integer), p=protein g, c=carbs g, f=fat g, su=sugar g, na=sodium mg, fi=fibre g.
+Estimate for a typical Singapore hawker serving size.
+If multiple items (e.g. rice + drink), list each separately.
+Return ONLY the JSON array, nothing else.`;
+
+    const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${key}`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [
+                    { inline_data: { mime_type: mime, data: base64 } },
+                    { text: prompt }
+                ]}]
+            })
+        }
+    );
+
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error?.message || `Gemini API error ${res.status}`);
+    }
+
+    const data = await res.json();
+    const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('Could not parse Gemini response.');
+    return JSON.parse(match[0]);
+}
+
+</script>
+</body>
+</html>
