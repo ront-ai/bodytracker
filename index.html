@@ -378,7 +378,7 @@
                     </div>
                 </div>
                 <div class="req-profile">
-                    <div><label>Age</label><input class="req-age" type="number" id="reqAge" min="10" max="100" placeholder="35" onchange="saveProfileExt();renderDayView()" /></div>
+                    <div><label>Age</label><input class="req-age" type="number" id="reqAge" min="10" max="100" placeholder="Age" onchange="saveProfileExt();renderDayView()" /></div>
                     <div><label>Height (cm)</label><input class="req-age" style="width:58px" type="number" id="reqHeight" min="100" max="250" placeholder="170" onchange="saveProfileExt();renderDayView()" /></div>
                     <div><label>Gender</label>
                         <select class="req-sel" id="reqGender" onchange="saveProfileExt();renderDayView()">
@@ -892,11 +892,11 @@ const FOOD_CATS = [
 // PROFILE
 // ──────────────────────────────────────────────
 let P = {
-    height: 173,
-    startWeight: 75.5,
-    targetWeight: 70,
-    targetDate: '2026-11-30',
-    startDate: '2026-04-25'
+    height: null,
+    startWeight: null,
+    targetWeight: null,
+    targetDate: null,
+    startDate: null
 };
 (function() { try { Object.assign(P, JSON.parse(localStorage.getItem('bt_goal') || '{}')); } catch(e){} })();
 
@@ -904,11 +904,11 @@ let P = {
 // PROFILE EXTENSION (age, gender, activity)
 // ──────────────────────────────────────────────
 function loadProfileExt() {
-    return JSON.parse(localStorage.getItem('bt_profile') || '{"age":35,"height":173,"gender":"male","activity":1.375}');
+    return JSON.parse(localStorage.getItem('bt_profile') || '{"age":null,"height":null,"gender":"male","activity":1.375}');
 }
 function saveProfileExt() {
-    const age      = parseInt(document.getElementById('reqAge')?.value)        || 35;
-    const height   = parseInt(document.getElementById('reqHeight')?.value)     || 173;
+    const age      = parseInt(document.getElementById('reqAge')?.value)        || null;
+    const height   = parseInt(document.getElementById('reqHeight')?.value)     || null;
     const gender   = document.getElementById('reqGender')?.value               || 'male';
     const activity = parseFloat(document.getElementById('reqActivity')?.value) || 1.375;
     localStorage.setItem('bt_profile', JSON.stringify({ age, height, gender, activity }));
